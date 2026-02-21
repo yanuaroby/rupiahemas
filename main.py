@@ -29,11 +29,6 @@ def main():
     print("BloombergTechnoz Financial Script Bot")
     print("=" * 50)
 
-    # Check if weekday (disabled for testing)
-    # if not is_weekday():
-    #     print("Today is a weekend. Skipping execution.")
-    #     sys.exit(0)
-
     # Check environment variables
     print("\nChecking configuration...")
     from src.config import GROQ_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
@@ -86,7 +81,10 @@ def main():
         else:
             print("  ✗ Failed to send Rupiah script")
     else:
-        print("  ✗ Failed to scrape Rupiah data")
+        print("  ✗ No Rupiah articles found")
+        # Send "tidak ada artikel" message
+        no_article_msg = "📊 *SCRIPT RUPIAH* 📊\n\n*Tidak ada artikel* tentang rupiah yang ditemukan hari ini.\n\n────────────────────\nℹ️ _Data dari BloombergTechnoz.com_"
+        results["rupiah"] = telegram.send_message(no_article_msg)
 
     # ========== GOLD SCRIPT ==========
     print("\n[1/4] Scraping Gold data...")
@@ -115,7 +113,10 @@ def main():
         else:
             print("  ✗ Failed to send Gold script")
     else:
-        print("  ✗ Failed to scrape Gold data")
+        print("  ✗ No Gold articles found")
+        # Send "tidak ada artikel" message
+        no_article_msg = "📊 *SCRIPT GOLD* 📊\n\n*Tidak ada artikel* tentang emas/antam yang ditemukan hari ini.\n\n────────────────────\nℹ️ _Data dari BloombergTechnoz.com_"
+        results["gold"] = telegram.send_message(no_article_msg)
 
     # ========== SUMMARY ==========
     print("\n" + "=" * 50)

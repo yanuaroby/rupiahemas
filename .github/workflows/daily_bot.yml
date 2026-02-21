@@ -2,9 +2,9 @@ name: Daily Financial Script Bot
 
 on:
   schedule:
-    # Run Monday-Friday at 02:00 UTC (09:00 WIB)
+    # Run every day at 02:00 UTC (09:00 WIB)
     # Cron format: minute hour day month weekday
-    - cron: '0 2 * * 1-5'
+    - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger for testing
 
 jobs:
