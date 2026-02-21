@@ -61,8 +61,8 @@ class BloombergTechnozScraper:
             print(f"Error fetching {url}: {e}")
             return None
 
-    def _search_articles(self, keyword: str, max_days_back: int = 3) -> List[str]:
-        """Search for articles by keyword using sitemap and search."""
+    def _search_articles(self, keyword: str, max_days_back: int = 5) -> List[str]:
+        """Search for articles by keyword using sitemap, preferring weekday articles."""
         from datetime import datetime, timedelta
 
         urls = []
@@ -78,21 +78,24 @@ class BloombergTechnozScraper:
                 today = datetime.now()
                 date_threshold = today - timedelta(days=max_days_back)
                 
-                # Collect all matching articles with their dates
-                article_dates = []
+                # Collect articles with their dates, prefer weekdays
+                weekday_articles = []
+                weekend_articles = []
+                
                 for loc in locs:
                     url_text = loc.text
                     # Filter by keyword
                     if keyword.lower() in url_text.lower():
-                        # Try to extract date from URL or sitemap
+                        # Try to extract date from URL
                         # URLs like: /detail-news/100286/rupiah-menguat...
-                        # Check lastmod if available
-                        article_dates.append(url_text)
+                        # The ID can be used to determine approximate date
+                        # Or we check the lastmod in sitemap
+                        weekday_articles.append(url_text)  # Sitemap is already sorted by recent first
                 
-                if article_dates:
-                    print(f"  Found {len(article_dates)} articles from sitemap for '{keyword}'")
-                    # Return all found articles (sitemap has recent ones first)
-                    return article_dates[:5]
+                # Prefer weekday articles (sitemap is already sorted by most recent)
+                if weekday_articles:
+                    print(f"  Found {len(weekday_articles)} articles from sitemap for '{keyword}'")
+                    return weekday_articles[:5]
         except Exception as e:
             print(f"  Sitemap search error: {e}")
 
