@@ -40,11 +40,13 @@ def main():
     
     if TELEGRAM_BOT_TOKEN:
         print("✓ TELEGRAM_BOT_TOKEN is configured")
+        print(f"  Token length: {len(TELEGRAM_BOT_TOKEN)} chars")
     else:
         print("✗ TELEGRAM_BOT_TOKEN is NOT configured")
     
     if TELEGRAM_CHAT_ID:
         print("✓ TELEGRAM_CHAT_ID is configured")
+        print(f"  Chat ID: {TELEGRAM_CHAT_ID}")
     else:
         print("✗ TELEGRAM_CHAT_ID is NOT configured")
 
@@ -52,7 +54,10 @@ def main():
     scraper = BloombergTechnozScraper()
     summarizer = GroqSummarizer()
     generator = ScriptGenerator()
-    telegram = TelegramSender()
+    
+    # Pass secrets explicitly to TelegramSender
+    print("\nInitializing Telegram bot...")
+    telegram = TelegramSender(token=TELEGRAM_BOT_TOKEN, chat_id=TELEGRAM_CHAT_ID)
 
     # Track results
     results = {"rupiah": False, "gold": False}

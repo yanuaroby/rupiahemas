@@ -15,13 +15,19 @@ class TelegramSender:
     """Send messages via Telegram Bot."""
 
     def __init__(self, token: Optional[str] = None, chat_id: Optional[str] = None):
+        # First try direct parameters, then fall back to config
         self.token = token or TELEGRAM_BOT_TOKEN
         self.chat_id = chat_id or TELEGRAM_CHAT_ID
+        
+        # Debug print at initialization
+        print(f"TelegramSender init: token={bool(self.token)}, chat_id={bool(self.chat_id)}")
 
         if self.token:
             self.bot = Bot(token=self.token)
+            print(f"Bot initialized successfully")
         else:
             self.bot = None
+            print("Bot NOT initialized - no token")
 
     def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
         """
@@ -38,6 +44,8 @@ class TelegramSender:
         token_set = bool(self.token)
         chat_id_set = bool(self.chat_id)
         print(f"DEBUG: Token configured: {token_set}, Chat ID configured: {chat_id_set}")
+        print(f"DEBUG: Token type: {type(self.token)}, Chat ID type: {type(self.chat_id)}")
+        print(f"DEBUG: Chat ID value: {self.chat_id}")
         
         if not self.token:
             print("ERROR: Telegram bot token is empty or not set")
@@ -58,6 +66,8 @@ class TelegramSender:
             chat_id_str = str(self.chat_id)
             
             print(f"Attempting to send message to chat: {chat_id_str}")
+            print(f"Message length: {len(message)} characters")
+            print(f"Parse mode: {parse_mode}")
             
             self.bot.send_message(
                 chat_id=chat_id_str,
