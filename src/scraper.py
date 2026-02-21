@@ -62,33 +62,74 @@ class BloombergTechnozScraper:
             return None
 
     def _search_articles(self, keyword: str) -> List[str]:
-        """Search for articles by keyword and return URLs."""
-        search_url = f"{BASE_URL}/?s={keyword}"
-        soup = self._fetch_page(search_url)
-        if not soup:
-            return []
-
+        """Search for articles by keyword using sitemap and search."""
         urls = []
-        # Multiple selector fallbacks for search results
-        selectors = [
-            "article h2 a",
-            "article h3 a",
-            ".entry-title a",
-            ".post-title a",
-            "h2 a[href]",
-            ".wp-block-post-title a",
+
+        # Primary method: Use news sitemap
+        try:
+            sitemap_url = f"{BASE_URL}/sitemap-news.xml"
+            soup = self._fetch_page(sitemap_url)
+            if soup:
+                locs = soup.find_all('loc')
+                for loc in locs:
+                    url_text = loc.text
+                    # Filter by keyword
+                    if keyword.lower() in url_text.lower():
+                        if url_text not in urls:
+                            urls.append(url_text)
+                if urls:
+                    print(f"  Found {len(urls)} articles from sitemap for '{keyword}'")
+                    return urls[:5]
+        except Exception as e:
+            print(f"  Sitemap search error: {e}")
+
+        # Fallback: Try search URLs
+        search_urls = [
+            f"{BASE_URL}/?s={keyword}",
+            f"{BASE_URL}/page/1/?s={keyword}",
         ]
 
-        for selector in selectors:
-            elements = soup.select(selector)
-            for elem in elements:
-                href = elem.get("href")
-                if href and href not in urls:
-                    urls.append(href)
+        for search_url in search_urls:
+            soup = self._fetch_page(search_url)
+            if not soup:
+                continue
+
+            selectors = [
+                "article h2 a",
+                ".entry-title a",
+                "h2 a[href]",
+                "a[href*='/202']",
+                "a[href*='/detail']",
+            ]
+
+            for selector in selectors:
+                elements = soup.select(selector)
+                for elem in elements:
+                    href = elem.get("href")
+                    text = elem.get_text(strip=True)
+                    if href and text and keyword.lower() in text.lower():
+                        if href not in urls:
+                            urls.append(href)
+                if urls:
+                    break
+
             if urls:
                 break
 
-        return urls[:3]  # Return top 3 results
+        # Second fallback: Homepage
+        if not urls:
+            print(f"  Trying homepage fallback...")
+            homepage = self._fetch_page(BASE_URL)
+            if homepage:
+                all_links = homepage.find_all('a', href=True)
+                for link in all_links:
+                    href = link.get('href')
+                    text = link.get_text(strip=True).lower()
+                    if href and keyword.lower() in text:
+                        if href not in urls:
+                            urls.append(href)
+
+        return urls[:5]
 
     def _extract_text(self, soup: BeautifulSoup, selectors: List[str]) -> Optional[str]:
         """Extract text using multiple selector fallbacks."""
@@ -146,18 +187,28 @@ class BloombergTechnozScraper:
             ".post-content",
             "article .content",
             ".wp-block-post-content",
-            ".entry-content p",
+            ".article-content",
+            ".news-content",
+            ".detail-content",
         ]
 
         for selector in selectors:
             elem = soup.select_one(selector)
             if elem:
                 # Get all paragraph text
-                paragraphs = elem.find_all("p") if "p" not in selector else [elem]
-                content = " ".join([p.get_text(strip=True) for p in paragraphs])
-                return content
+                paragraphs = elem.find_all("p")
+                if paragraphs:
+                    content = " ".join([p.get_text(strip=True) for p in paragraphs])
+                    return content
+                else:
+                    return elem.get_text(strip=True)
 
-        # Fallback: get all text from body
+        # Fallback: get text from article tag
+        article = soup.find("article")
+        if article:
+            return article.get_text(strip=True)[:2000]
+
+        # Last fallback: get all text from body
         body = soup.find("body")
         if body:
             return body.get_text(strip=True)[:2000]
@@ -176,12 +227,14 @@ class BloombergTechnozScraper:
 
         # Extract opening rate (pembukaan)
         opening_patterns = [
-            r"level\s+([\d\.]+)\s*/\s*US\$",
-            r"pembukaan[^/]+?([\d\.]+)\s*/\s*US\$",
+            r"pembukaan[\s\w]+?di\s+level\s*([\d\.]+)\s*/\s*US\$",
+            r"pembukaan[\s\w]+?([\d\.]+)\s*/\s*US\$",
             r"[Pp]ada\s+pembukaan[^/]+?([\d\.]+)",
             r"dibuka[^/]+?([\d\.]+)\s*/\s*US\$",
             r"Rp\s*([\d\.]+)\s*/\s*US\$\s+pada pembukaan",
             r"pada pembukaan[^/]+?Rp\s*([\d\.]+)",
+            r"melemah[\s\w]+?Rp\s*([\d\.]+)\s*/\s*US\$",
+            r"menguat[\s\w]+?Rp\s*([\d\.]+)\s*/\s*US\$",
         ]
         for pattern in opening_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
@@ -192,17 +245,25 @@ class BloombergTechnozScraper:
                     data["opening_rate"] = float(groups[-1].replace(".", ""))
                 break
 
-        # Extract current rate
+        # Extract current rate (penutupan or current)
         current_patterns = [
-            r"bergerak[\s\w]+?(\d+\.?\d*)\s*/\s*US\$",
-            r"berada[\s\w]+?(\d+\.?\d*)\s*/\s*US\$",
-            r"diperdagangkan[\s\w]+?(\d+\.?\d*)\s*/\s*US\$",
-            r"rupiah dihargai\s*(\d+\.?\d*)\s*/\s*US\$",
+            r"ditutup[\s\w]+?Rp\s*([\d\.]+)\s*/\s*US\$",
+            r"penutupan[\s\w]+?Rp\s*([\d\.]+)\s*/\s*US\$",
+            r"bergerak[\s\w]+?([\d\.]+)\s*/\s*US\$",
+            r"berada[\s\w]+?([\d\.]+)\s*/\s*US\$",
+            r"diperdagangkan[\s\w]+?([\d\.]+)\s*/\s*US\$",
+            r"rupiah dihargai\s*([\d\.]+)\s*/\s*US\$",
+            r"menguat[\s\w]+?ke\s+posisi\s+Rp\s*([\d\.]+)\s*/\s*US\$",
+            r"melemah[\s\w]+?ke\s+posisi\s+Rp\s*([\d\.]+)\s*/\s*US\$",
+            r"di\s+posisi\s+Rp\s*([\d\.]+)\s*/\s*US\$",
+            r"Rp\s*([\d\.]+)\s*/\s*US\$[\s\w]+,?\s+setelah",
         ]
         for pattern in current_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
-                data["current_rate"] = float(match.group(1).replace(".", ""))
+                groups = [g for g in match.groups() if g is not None]
+                if groups:
+                    data["current_rate"] = float(groups[-1].replace(".", ""))
                 break
 
         # Extract time (WIB)
@@ -210,6 +271,7 @@ class BloombergTechnozScraper:
             r"pukul\s*(\d{1,2}:\d{2})\s*WIB",
             r"(\d{1,2}:\d{2})\s*WIB",
             r"pada\s*(\d{1,2}:\d{2})",
+            r"sore ini\s+\((\d{1,2}/\d{1,2}/\d{4})\)",
         ]
         for pattern in time_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
@@ -221,23 +283,25 @@ class BloombergTechnozScraper:
         # Order matters: check trend word patterns first
         pct_patterns = [
             r"(melemah|menguat)\s*(\d+\.?\d*)\s*%\s*(?:dari sebelumnya)?",
-            r"([+-]?\d+\.?\d*)\s*%\s*(?:dari sebelumnya|terhadap.*sebelumnya)",
+            r"([\d\.]+)\s*%\s*(?:dari sebelumnya|terhadap.*sebelumnya)",
             r"([+-]?\d+\.?\d*)\s*%",
+            r"menguat\s+([\d\.]+)\s*persen",
+            r"melemah\s+([\d\.]+)\s*persen",
         ]
         for pattern in pct_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 try:
                     groups = match.groups()
-                    if len(groups) == 2 and groups[0] in ["melemah", "menguat"]:
+                    if len(groups) >= 2 and groups[0] in ["melemah", "menguat"]:
                         # Pattern with trend word
                         trend_word = groups[0].lower()
-                        pct_value = float(groups[1])
+                        pct_value = float(groups[1].replace(".", ""))
                         if trend_word == "melemah":
                             pct_value = -pct_value
                         data["percentage_change"] = pct_value
                     else:
-                        # Pattern with sign
+                        # Pattern with sign or just number
                         pct_value = float(groups[0].replace("-", ""))
                         if "-" in match.group(1) or "melemah" in match.group(0).lower():
                             pct_value = -pct_value
@@ -257,6 +321,7 @@ class BloombergTechnozScraper:
             "baht": "Baht",
             "dolar singapura": "Dolar Singapura",
             "dolar hong kong": "Dolar Hong Kong",
+            "rupee": "Rupee",
         }
 
         for currency, name in currency_names.items():

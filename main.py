@@ -29,10 +29,10 @@ def main():
     print("BloombergTechnoz Financial Script Bot")
     print("=" * 50)
 
-    # Check if weekday (commented out for testing)
-    # if not is_weekday():
-    #     print("Today is a weekend. Skipping execution.")
-    #     sys.exit(0)
+    # Check if weekday
+    if not is_weekday():
+        print("Today is a weekend. Skipping execution.")
+        sys.exit(0)
 
     # Initialize components
     scraper = BloombergTechnozScraper()

@@ -6,7 +6,7 @@ To build a Python-based automation tool that scrapes financial data (Gold and Ru
 ## 2. Target Source
 - **Website:** `bloombergtechnoz.com`
 - **Focus Areas:** - Rupiah exchange rate (vs USD) and Asian market trends.
-    - Gold prices (Antam & Global Gold).
+    - Gold prices (Antam & Global Gold) pada hari itu. contoh hari jumat 20 februari 2026.
     - keyword "emas/ antam" and "rupiah"
 
 ## 3. Core Features

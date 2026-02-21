@@ -16,7 +16,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Base URL for BloombergTechnoz
-BASE_URL = "https://bloombergtechnoz.com"
+BASE_URL = "https://www.bloombergtechnoz.com"
 
 # Search keywords
 RUPIAH_KEYWORD = "rupiah"
