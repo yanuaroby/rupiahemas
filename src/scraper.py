@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import requests
 from bs4 import BeautifulSoup
 
-from .config import BASE_URL, HEADERS, REQUEST_TIMEOUT, RUPIAH_KEYWORD, GOLD_KEYWORD
+from .config import BASE_URL, HEADERS, REQUEST_TIMEOUT, RUPIAH_KEYWORD
 
 
 @dataclass
@@ -501,49 +501,55 @@ class BloombergTechnozScraper:
 
     def scrape_gold(self) -> Optional[GoldData]:
         """Scrape latest Gold (Antam) news and data."""
-        urls = self._search_articles(GOLD_KEYWORD)
+        # Try multiple keywords: antam first, then emas
+        from .config import GOLD_KEYWORDS
+        
+        for keyword in GOLD_KEYWORDS:
+            urls = self._search_articles(keyword)
+            
+            for url in urls:
+                soup = self._fetch_page(url)
+                if not soup:
+                    continue
 
-        for url in urls:
-            soup = self._fetch_page(url)
-            if not soup:
-                continue
+                # Extract title
+                title_selectors = [
+                    "h1.entry-title",
+                    "h1.post-title",
+                    "h1.wp-block-post-title",
+                    "article h1",
+                    "h1",
+                ]
+                title = self._extract_text(soup, title_selectors)
+                if not title:
+                    continue
 
-            # Extract title
-            title_selectors = [
-                "h1.entry-title",
-                "h1.post-title",
-                "h1.wp-block-post-title",
-                "article h1",
-                "h1",
-            ]
-            title = self._extract_text(soup, title_selectors)
-            if not title:
-                continue
+                # Extract content
+                content = self._extract_article_content(soup)
+                if not content:
+                    continue
 
-            # Extract content
-            content = self._extract_article_content(soup)
-            if not content:
-                continue
+                # Parse gold data from content
+                parsed = self._parse_gold_from_content(content)
 
-            # Parse gold data from content
-            parsed = self._parse_gold_from_content(content)
+                # Only return if we found relevant Antam/gold data
+                if parsed["antam_price"] or parsed["antam_change"] or "antam" in content.lower() or "emas" in content.lower():
+                    # Get current date if not found
+                    date = parsed["date"]
+                    if not date:
+                        date = datetime.now().strftime("%d %B %Y")
 
-            # Get current date if not found
-            date = parsed["date"]
-            if not date:
-                date = datetime.now().strftime("%d %B %Y")
-
-            return GoldData(
-                title=title,
-                antam_price=parsed["antam_price"],
-                antam_change=parsed["antam_change"],
-                antam_trend=self._determine_gold_trend(parsed["antam_change"]),
-                buyback_price=parsed["buyback_price"],
-                buyback_change=parsed["buyback_change"],
-                global_gold_usd=parsed["global_gold_usd"],
-                global_gold_change_pct=parsed["global_gold_change_pct"],
-                date=date,
-                content=content,
-            )
+                    return GoldData(
+                        title=title,
+                        antam_price=parsed["antam_price"],
+                        antam_change=parsed["antam_change"],
+                        antam_trend=self._determine_gold_trend(parsed["antam_change"]),
+                        buyback_price=parsed["buyback_price"],
+                        buyback_change=parsed["buyback_change"],
+                        global_gold_usd=parsed["global_gold_usd"],
+                        global_gold_change_pct=parsed["global_gold_change_pct"],
+                        date=date,
+                        content=content,
+                    )
 
         return None
