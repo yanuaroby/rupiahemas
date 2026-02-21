@@ -61,7 +61,7 @@ class BloombergTechnozScraper:
             print(f"Error fetching {url}: {e}")
             return None
 
-    def _search_articles(self, keyword: str, max_days_back: int = 5) -> List[str]:
+    def _search_articles(self, keyword: str, max_days_back: int = 5, prefer_weekday: bool = True) -> List[str]:
         """Search for articles by keyword using sitemap, preferring weekday articles."""
         from datetime import datetime, timedelta
 
@@ -74,11 +74,7 @@ class BloombergTechnozScraper:
             if soup:
                 locs = soup.find_all('loc')
                 
-                # Calculate date threshold (max_days_back days ago)
-                today = datetime.now()
-                date_threshold = today - timedelta(days=max_days_back)
-                
-                # Collect articles with their dates, prefer weekdays
+                # Collect articles with their dates
                 weekday_articles = []
                 weekend_articles = []
                 
@@ -86,16 +82,37 @@ class BloombergTechnozScraper:
                     url_text = loc.text
                     # Filter by keyword
                     if keyword.lower() in url_text.lower():
-                        # Try to extract date from URL
-                        # URLs like: /detail-news/100286/rupiah-menguat...
-                        # The ID can be used to determine approximate date
-                        # Or we check the lastmod in sitemap
-                        weekday_articles.append(url_text)  # Sitemap is already sorted by recent first
+                        # Fetch article to get publish date
+                        article_soup = self._fetch_page(url_text)
+                        if article_soup:
+                            # Extract date from article
+                            date_str = self._extract_article_date(article_soup)
+                            if date_str:
+                                try:
+                                    # Parse date (format: 20 February 2026)
+                                    article_date = datetime.strptime(date_str, "%d %B %Y")
+                                    is_weekday = article_date.weekday() < 5
+                                    
+                                    if is_weekday:
+                                        weekday_articles.append((url_text, article_date))
+                                    else:
+                                        weekend_articles.append((url_text, article_date))
+                                except ValueError:
+                                    weekday_articles.append((url_text, None))
                 
-                # Prefer weekday articles (sitemap is already sorted by most recent)
-                if weekday_articles:
-                    print(f"  Found {len(weekday_articles)} articles from sitemap for '{keyword}'")
-                    return weekday_articles[:5]
+                # Prefer weekday articles
+                if prefer_weekday and weekday_articles:
+                    # Sort by date (most recent first)
+                    weekday_articles.sort(key=lambda x: x[1] if x[1] else datetime.now(), reverse=True)
+                    print(f"  Found {len(weekday_articles)} weekday articles from sitemap for '{keyword}'")
+                    return [url for url, _ in weekday_articles[:5]]
+                
+                # Fallback to weekend articles
+                if weekend_articles:
+                    weekend_articles.sort(key=lambda x: x[1] if x[1] else datetime.now(), reverse=True)
+                    print(f"  Found {len(weekend_articles)} weekend articles from sitemap for '{keyword}'")
+                    return [url for url, _ in weekend_articles[:5]]
+                    
         except Exception as e:
             print(f"  Sitemap search error: {e}")
 
@@ -146,6 +163,36 @@ class BloombergTechnozScraper:
                             urls.append(href)
 
         return urls[:5]
+
+    def _extract_article_date(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract publish date from article page."""
+        # Try multiple selectors
+        selectors = [
+            "time",
+            ".date",
+            ".published",
+            ".article-date",
+            ".post-date",
+        ]
+        
+        for selector in selectors:
+            elem = soup.select_one(selector)
+            if elem:
+                return elem.get_text(strip=True)
+        
+        # Try meta tag
+        meta = soup.find("meta", property="article:published_time")
+        if meta:
+            return meta.get("content")
+        
+        # Try regex in content
+        import re
+        content = str(soup)
+        match = re.search(r'(\d{1,2}\s+\w+\s+\d{4})\s+\d{2}:\d{2}', content)
+        if match:
+            return match.group(1)
+        
+        return None
 
     def _extract_text(self, soup: BeautifulSoup, selectors: List[str]) -> Optional[str]:
         """Extract text using multiple selector fallbacks."""
@@ -508,7 +555,12 @@ class BloombergTechnozScraper:
         from .config import GOLD_KEYWORDS
         
         for keyword in GOLD_KEYWORDS:
-            urls = self._search_articles(keyword)
+            # First try with weekday preference
+            urls = self._search_articles(keyword, prefer_weekday=True)
+            
+            # If no weekday articles found, try without preference
+            if not urls:
+                urls = self._search_articles(keyword, prefer_weekday=False)
             
             for url in urls:
                 soup = self._fetch_page(url)
@@ -540,7 +592,9 @@ class BloombergTechnozScraper:
                     # Get current date if not found
                     date = parsed["date"]
                     if not date:
-                        date = datetime.now().strftime("%d %B %Y")
+                        # Extract from article
+                        article_date = self._extract_article_date(soup)
+                        date = article_date if article_date else datetime.now().strftime("%d %B %Y")
 
                     return GoldData(
                         title=title,
