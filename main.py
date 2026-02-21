@@ -29,10 +29,29 @@ def main():
     print("BloombergTechnoz Financial Script Bot")
     print("=" * 50)
 
-    # Check if weekday (temporarily disabled for weekend testing)
+    # Check if weekday (disabled for testing)
     # if not is_weekday():
     #     print("Today is a weekend. Skipping execution.")
     #     sys.exit(0)
+
+    # Check environment variables
+    print("\nChecking configuration...")
+    from src.config import GROQ_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+    
+    if GROQ_API_KEY:
+        print("✓ GROQ_API_KEY is configured")
+    else:
+        print("✗ GROQ_API_KEY is NOT configured")
+    
+    if TELEGRAM_BOT_TOKEN:
+        print("✓ TELEGRAM_BOT_TOKEN is configured")
+    else:
+        print("✗ TELEGRAM_BOT_TOKEN is NOT configured")
+    
+    if TELEGRAM_CHAT_ID:
+        print("✓ TELEGRAM_CHAT_ID is configured")
+    else:
+        print("✗ TELEGRAM_CHAT_ID is NOT configured")
 
     # Initialize components
     scraper = BloombergTechnozScraper()

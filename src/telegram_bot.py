@@ -34,12 +34,18 @@ class TelegramSender:
         Returns:
             True if message was sent successfully, False otherwise
         """
-        if not self.token or not self.chat_id:
-            print("Telegram bot token or chat ID not configured")
+        if not self.token:
+            print("ERROR: Telegram bot token not configured")
+            print(f"Message would be: {message[:200]}...")
+            return False
+
+        if not self.chat_id:
+            print("ERROR: Telegram chat ID not configured")
             print(f"Message would be: {message[:200]}...")
             return False
 
         if not self.bot:
+            print("ERROR: Bot not initialized")
             return False
 
         try:
@@ -48,13 +54,13 @@ class TelegramSender:
                 text=message,
                 parse_mode=parse_mode,
             )
-            print(f"Message sent successfully to chat {self.chat_id}")
+            print(f"✓ Message sent successfully to chat {self.chat_id}")
             return True
         except TelegramError as e:
-            print(f"Telegram error: {e}")
+            print(f"✗ Telegram error: {e}")
             return False
         except Exception as e:
-            print(f"Unexpected error sending message: {e}")
+            print(f"✗ Unexpected error sending message: {e}")
             return False
 
     def send_rupiah_script(self, script: str) -> bool:
