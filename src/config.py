@@ -7,10 +7,11 @@ import os
 from dotenv import load_dotenv
 import pytz
 
-# Load environment variables from .env file
+# Load environment variables from .env file (for local development)
 load_dotenv()
 
-# API Keys
+# API Keys - read from environment variables (works for both local and GitHub Actions)
+# GitHub Actions secrets are automatically set as environment variables
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")

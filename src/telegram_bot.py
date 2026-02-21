@@ -23,7 +23,7 @@ class TelegramSender:
         else:
             self.bot = None
 
-    def send_message(self, message: str, parse_mode: str = "Markdown") -> bool:
+    def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
         """
         Send a message to the configured chat.
 
@@ -34,14 +34,19 @@ class TelegramSender:
         Returns:
             True if message was sent successfully, False otherwise
         """
+        # Debug: Print if token/chat_id exist (without showing values)
+        token_set = bool(self.token)
+        chat_id_set = bool(self.chat_id)
+        print(f"DEBUG: Token configured: {token_set}, Chat ID configured: {chat_id_set}")
+        
         if not self.token:
-            print("ERROR: Telegram bot token not configured")
-            print(f"Message would be: {message[:200]}...")
+            print("ERROR: Telegram bot token is empty or not set")
+            print("Check that TELEGRAM_BOT_TOKEN secret is configured in GitHub")
             return False
 
         if not self.chat_id:
-            print("ERROR: Telegram chat ID not configured")
-            print(f"Message would be: {message[:200]}...")
+            print("ERROR: Telegram chat ID is empty or not set")
+            print("Check that TELEGRAM_CHAT_ID secret is configured in GitHub")
             return False
 
         if not self.bot:
@@ -49,18 +54,36 @@ class TelegramSender:
             return False
 
         try:
+            # Convert chat_id to string to handle both int and str
+            chat_id_str = str(self.chat_id)
+            
+            print(f"Attempting to send message to chat: {chat_id_str}")
+            
             self.bot.send_message(
-                chat_id=self.chat_id,
+                chat_id=chat_id_str,
                 text=message,
                 parse_mode=parse_mode,
             )
-            print(f"✓ Message sent successfully to chat {self.chat_id}")
+            print(f"✓ Message sent successfully to chat {chat_id_str}")
             return True
         except TelegramError as e:
             print(f"✗ Telegram error: {e}")
+            print(f"Error type: {type(e).__name__}")
+            # Try fallback with no parse mode
+            try:
+                print("Trying fallback without parse mode...")
+                self.bot.send_message(
+                    chat_id=str(self.chat_id),
+                    text=message.replace("*", "").replace("_", "").replace("[", "").replace("]", ""),
+                )
+                print("✓ Fallback succeeded")
+                return True
+            except Exception as fallback_error:
+                print(f"✗ Fallback also failed: {fallback_error}")
             return False
         except Exception as e:
             print(f"✗ Unexpected error sending message: {e}")
+            print(f"Error type: {type(e).__name__}")
             return False
 
     def send_rupiah_script(self, script: str) -> bool:

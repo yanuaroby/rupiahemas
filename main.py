@@ -83,7 +83,7 @@ def main():
     else:
         print("  ✗ No Rupiah articles found")
         # Send "tidak ada artikel" message
-        no_article_msg = "📊 *SCRIPT RUPIAH* 📊\n\n*Tidak ada artikel* tentang rupiah yang ditemukan hari ini.\n\n────────────────────\nℹ️ _Data dari BloombergTechnoz.com_"
+        no_article_msg = "📊 <b>SCRIPT RUPIAH</b> 📊\n\n<b>Tidak ada artikel</b> tentang rupiah yang ditemukan hari ini.\n\n────────────────────\nℹ️ <i>Data dari BloombergTechnoz.com</i>"
         results["rupiah"] = telegram.send_message(no_article_msg)
 
     # ========== GOLD SCRIPT ==========
@@ -115,7 +115,7 @@ def main():
     else:
         print("  ✗ No Gold articles found")
         # Send "tidak ada artikel" message
-        no_article_msg = "📊 *SCRIPT GOLD* 📊\n\n*Tidak ada artikel* tentang emas/antam yang ditemukan hari ini.\n\n────────────────────\nℹ️ _Data dari BloombergTechnoz.com_"
+        no_article_msg = "📊 <b>SCRIPT GOLD</b> 📊\n\n<b>Tidak ada artikel</b> tentang emas/antam yang ditemukan hari ini.\n\n────────────────────\nℹ️ <i>Data dari BloombergTechnoz.com</i>"
         results["gold"] = telegram.send_message(no_article_msg)
 
     # ========== SUMMARY ==========

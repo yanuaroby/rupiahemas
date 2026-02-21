@@ -151,11 +151,28 @@ PERKIRAAN KENAIKAN HARGA EMAS DUNIA {analysis.forecast_range_usd} atau {analysis
         return script.strip()
 
     def format_for_telegram(self, script: str, script_type: str) -> str:
-        """Format script for Telegram message with appropriate styling."""
-        header = f"📊 *SCRIPT {script_type.upper()}* 📊\n\n"
-        footer = "\n\n────────────────────\nℹ️ _Data dari BloombergTechnoz.com_"
+        """Format script for Telegram message with HTML styling."""
+        header = f"📊 <b>SCRIPT {script_type.upper()}</b> 📊\n\n"
+        footer = "\n\n────────────────────\nℹ️ <i>Data dari BloombergTechnoz.com</i>"
 
-        # Escape markdown special characters for Telegram
-        escaped_script = script.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
+        # Escape HTML special characters
+        escaped_script = script.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        # Convert markdown-style formatting to HTML
+        escaped_script = escaped_script.replace("**", "<b>").replace("__", "<i>")
+        
+        # Handle bold titles (JUDUL : ...)
+        import re
+        escaped_script = re.sub(r'JUDUL : (.+)', r'<b>JUDUL : \1</b>', escaped_script)
+        
+        # Handle section headers (ALL CAPS lines)
+        lines = escaped_script.split('\n')
+        formatted_lines = []
+        for line in lines:
+            if line.isupper() and len(line) > 3:
+                formatted_lines.append(f"<b>{line}</b>")
+            else:
+                formatted_lines.append(line)
+        escaped_script = '\n'.join(formatted_lines)
 
         return header + escaped_script + footer
