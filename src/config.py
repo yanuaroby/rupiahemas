@@ -27,8 +27,8 @@ GOLD_KEYWORDS = ["antam", "emas"]  # Try antam first, then emas as fallback
 WIB_TIMEZONE = pytz.timezone("Asia/Jakarta")
 UTC_TIMEZONE = pytz.utc
 
-# Groq model configuration
-GROQ_MODEL = "llama-3.1-70b-versatile"
+# Groq model configuration (updated - old model was decommissioned)
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 # Request headers for scraping
 HEADERS = {

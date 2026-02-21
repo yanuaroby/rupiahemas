@@ -1,18 +1,16 @@
 """
 Telegram bot module for sending financial scripts.
-Uses python-telegram-bot library.
+Uses python-telegram-bot library with synchronous requests.
 """
 
 from typing import Optional
-
-from telegram import Bot
-from telegram.error import TelegramError
+import requests
 
 from .config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
 class TelegramSender:
-    """Send messages via Telegram Bot."""
+    """Send messages via Telegram Bot using synchronous HTTP requests."""
 
     def __init__(self, token: Optional[str] = None, chat_id: Optional[str] = None):
         # First try direct parameters, then fall back to config
@@ -21,17 +19,18 @@ class TelegramSender:
         
         # Debug print at initialization
         print(f"TelegramSender init: token={bool(self.token)}, chat_id={bool(self.chat_id)}")
-
+        
+        # Build the API URL
         if self.token:
-            self.bot = Bot(token=self.token)
-            print(f"Bot initialized successfully")
+            self.api_url = f"https://api.telegram.org/bot{self.token}"
+            print(f"Bot API URL initialized")
         else:
-            self.bot = None
+            self.api_url = None
             print("Bot NOT initialized - no token")
 
     def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
         """
-        Send a message to the configured chat.
+        Send a message to the configured chat using Telegram Bot API.
 
         Args:
             message: The message text to send
@@ -57,39 +56,49 @@ class TelegramSender:
             print("Check that TELEGRAM_CHAT_ID secret is configured in GitHub")
             return False
 
-        if not self.bot:
-            print("ERROR: Bot not initialized")
+        if not self.api_url:
+            print("ERROR: Bot API URL not initialized")
             return False
 
         try:
-            # Convert chat_id to string to handle both int and str
+            # Use Telegram Bot API directly with requests
+            url = f"{self.api_url}/sendMessage"
             chat_id_str = str(self.chat_id)
             
             print(f"Attempting to send message to chat: {chat_id_str}")
             print(f"Message length: {len(message)} characters")
             print(f"Parse mode: {parse_mode}")
             
-            self.bot.send_message(
-                chat_id=chat_id_str,
-                text=message,
-                parse_mode=parse_mode,
-            )
-            print(f"✓ Message sent successfully to chat {chat_id_str}")
-            return True
-        except TelegramError as e:
-            print(f"✗ Telegram error: {e}")
-            print(f"Error type: {type(e).__name__}")
-            # Try fallback with no parse mode
-            try:
-                print("Trying fallback without parse mode...")
-                self.bot.send_message(
-                    chat_id=str(self.chat_id),
-                    text=message.replace("*", "").replace("_", "").replace("[", "").replace("]", ""),
-                )
-                print("✓ Fallback succeeded")
+            payload = {
+                "chat_id": chat_id_str,
+                "text": message,
+                "parse_mode": parse_mode
+            }
+            
+            response = requests.post(url, json=payload, timeout=30)
+            result = response.json()
+            
+            if result.get("ok"):
+                print(f"✓ Message sent successfully to chat {chat_id_str}")
+                print(f"Telegram API response: {result}")
                 return True
-            except Exception as fallback_error:
-                print(f"✗ Fallback also failed: {fallback_error}")
+            else:
+                print(f"✗ Telegram API error: {result}")
+                # Try fallback without parse mode
+                print("Trying fallback without parse mode...")
+                payload["parse_mode"] = None
+                payload["text"] = message.replace("*", "").replace("_", "").replace("[", "").replace("]", "").replace("<", "").replace(">", "")
+                response = requests.post(url, json=payload, timeout=30)
+                result = response.json()
+                if result.get("ok"):
+                    print("✓ Fallback succeeded")
+                    return True
+                else:
+                    print(f"✗ Fallback also failed: {result}")
+                return False
+                
+        except requests.RequestException as e:
+            print(f"✗ Network error: {e}")
             return False
         except Exception as e:
             print(f"✗ Unexpected error sending message: {e}")
