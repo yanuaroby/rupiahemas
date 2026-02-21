@@ -61,8 +61,10 @@ class BloombergTechnozScraper:
             print(f"Error fetching {url}: {e}")
             return None
 
-    def _search_articles(self, keyword: str) -> List[str]:
+    def _search_articles(self, keyword: str, max_days_back: int = 3) -> List[str]:
         """Search for articles by keyword using sitemap and search."""
+        from datetime import datetime, timedelta
+
         urls = []
 
         # Primary method: Use news sitemap
@@ -71,15 +73,26 @@ class BloombergTechnozScraper:
             soup = self._fetch_page(sitemap_url)
             if soup:
                 locs = soup.find_all('loc')
+                
+                # Calculate date threshold (max_days_back days ago)
+                today = datetime.now()
+                date_threshold = today - timedelta(days=max_days_back)
+                
+                # Collect all matching articles with their dates
+                article_dates = []
                 for loc in locs:
                     url_text = loc.text
                     # Filter by keyword
                     if keyword.lower() in url_text.lower():
-                        if url_text not in urls:
-                            urls.append(url_text)
-                if urls:
-                    print(f"  Found {len(urls)} articles from sitemap for '{keyword}'")
-                    return urls[:5]
+                        # Try to extract date from URL or sitemap
+                        # URLs like: /detail-news/100286/rupiah-menguat...
+                        # Check lastmod if available
+                        article_dates.append(url_text)
+                
+                if article_dates:
+                    print(f"  Found {len(article_dates)} articles from sitemap for '{keyword}'")
+                    # Return all found articles (sitemap has recent ones first)
+                    return article_dates[:5]
         except Exception as e:
             print(f"  Sitemap search error: {e}")
 
