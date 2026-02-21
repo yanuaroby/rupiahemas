@@ -21,7 +21,7 @@ BASE_URL = "https://www.bloombergtechnoz.com"
 
 # Search keywords
 RUPIAH_KEYWORD = "rupiah"
-GOLD_KEYWORDS = ["antam", "emas"]  # Try antam first, then emas as fallback
+GOLD_KEYWORD = "antam"  # Specifically search for Antam articles
 
 # Timezone configuration
 WIB_TIMEZONE = pytz.timezone("Asia/Jakarta")
