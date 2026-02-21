@@ -282,11 +282,11 @@ class BloombergTechnozScraper:
         # Extract percentage change
         # Order matters: check trend word patterns first
         pct_patterns = [
-            r"(melemah|menguat)\s*(\d+\.?\d*)\s*%\s*(?:dari sebelumnya)?",
-            r"([\d\.]+)\s*%\s*(?:dari sebelumnya|terhadap.*sebelumnya)",
-            r"([+-]?\d+\.?\d*)\s*%",
-            r"menguat\s+([\d\.]+)\s*persen",
-            r"melemah\s+([\d\.]+)\s*persen",
+            r"(melemah|menguat)\s*(\d+[,\.]?\d*)\s*%\s*(?:dari sebelumnya)?",
+            r"([\d,]+)\s*%\s*(?:dari sebelumnya|terhadap.*sebelumnya)",
+            r"([+-]?\d+[,\.]?\d*)\s*%",
+            r"menguat\s+([\d,]+)\s*persen",
+            r"melemah\s+([\d,]+)\s*persen",
         ]
         for pattern in pct_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
@@ -296,13 +296,15 @@ class BloombergTechnozScraper:
                     if len(groups) >= 2 and groups[0] in ["melemah", "menguat"]:
                         # Pattern with trend word
                         trend_word = groups[0].lower()
-                        pct_value = float(groups[1].replace(".", ""))
+                        pct_str = groups[1].replace(",", ".")
+                        pct_value = float(pct_str) if pct_str else 0
                         if trend_word == "melemah":
                             pct_value = -pct_value
                         data["percentage_change"] = pct_value
                     else:
                         # Pattern with sign or just number
-                        pct_value = float(groups[0].replace("-", ""))
+                        pct_str = groups[0].replace(",", ".").replace("-", "")
+                        pct_value = float(pct_str) if pct_str else 0
                         if "-" in match.group(1) or "melemah" in match.group(0).lower():
                             pct_value = -pct_value
                         data["percentage_change"] = pct_value

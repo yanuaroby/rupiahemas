@@ -84,7 +84,7 @@ class TestRupiahParsing(unittest.TestCase):
 
     def test_parse_rupiah_percentage(self):
         """Test parsing percentage change from content."""
-        content = "melemah 0.5% dari sebelumnya"
+        content = "melemah 0,5% dari sebelumnya"
         result = self.scraper._parse_rupiah_from_content(content)
         self.assertEqual(result["percentage_change"], -0.5)
 
