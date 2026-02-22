@@ -107,7 +107,7 @@ class TestGoldScriptGeneration(unittest.TestCase):
             antam_change=5000.0,
             antam_trend="naik",
             buyback_price=900000.0,
-            buyback_change=4500.0,
+            buyback_change=-4500.0,  # Different trend from Antam
             global_gold_usd=2000.0,
             global_gold_change_pct=0.5,
             date="21 Februari 2026",
@@ -133,12 +133,12 @@ class TestGoldScriptGeneration(unittest.TestCase):
         self.assertIn("HARGA EMAS DUNIA", script)
         self.assertIn("PERKIRAAN KENAIKAN HARGA EMAS DUNIA", script)
 
-    def test_generate_gold_script_contains_title(self):
-        """Test Gold script contains the title."""
+    def test_generate_gold_script_simplified_title(self):
+        """Test Gold script uses simplified title format."""
         script = self.generator.generate_gold_script(
             self.gold_data, self.gold_analysis
         )
-        self.assertIn(self.gold_data.title, script)
+        self.assertIn("JUDUL : EMAS ANTAM NAIK RP5.000/GRAM, HARI INI", script)
 
     def test_generate_gold_script_contains_price(self):
         """Test Gold script contains Antam price."""
@@ -152,7 +152,31 @@ class TestGoldScriptGeneration(unittest.TestCase):
         script = self.generator.generate_gold_script(
             self.gold_data, self.gold_analysis
         )
-        self.assertIn("naik", script.lower())
+        self.assertIn("kembali naik", script)
+
+    def test_generate_gold_script_buyback_independent_trend(self):
+        """Test buyback trend is calculated independently from Antam."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        # Antam is naik, but buyback_change is negative so should be turun
+        self.assertIn("Turun Rp4.500/gram", script)
+
+    def test_generate_gold_script_global_gold_format(self):
+        """Test global gold price is formatted correctly with decimal."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        # Should have decimal format like "US$ 2.000,0"
+        self.assertIn("US$ 2.000,0/troy ons", script)
+
+    def test_generate_gold_script_percentage_format(self):
+        """Test percentage uses Indonesian format with comma."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        # Should use comma as decimal separator: "0,50%"
+        self.assertIn("0,50%", script)
 
     def test_generate_gold_script_with_rupiah_rate(self):
         """Test Gold script generation with custom rupiah rate."""
@@ -160,6 +184,102 @@ class TestGoldScriptGeneration(unittest.TestCase):
             self.gold_data, self.gold_analysis, rupiah_rate=16500.0
         )
         self.assertIsNotNone(script)
+
+    def test_generate_gold_title_helper(self):
+        """Test the gold title helper method."""
+        title = self.generator._generate_gold_title("naik", 28000)
+        self.assertEqual(title, "EMAS ANTAM NAIK RP28.000/GRAM, HARI INI")
+
+        title = self.generator._generate_gold_title("turun", 15000)
+        self.assertEqual(title, "EMAS ANTAM TURUN RP15.000/GRAM, HARI INI")
+
+        title = self.generator._generate_gold_title("stagnan", 0)
+        self.assertEqual(title, "EMAS ANTAM STAGNAN RP0/GRAM, HARI INI")
+
+    def test_generate_gold_script_stagnan_no_change_line(self):
+        """Test that stagnan prices don't show change line."""
+        gold_data = GoldData(
+            title="Harga Emas Antam Stagnan",
+            antam_price=2944000.0,
+            antam_change=0.0,
+            antam_trend="stagnan",
+            buyback_price=2649600.0,
+            buyback_change=0.0,
+            global_gold_usd=2000.0,
+            global_gold_change_pct=0.0,
+            date="20 Februari 2026",
+            content="Test content",
+        )
+        gold_analysis = GoldAnalysis(
+            global_correlation="Korelasi text.",
+            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
+            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
+            price_catalysts="Catalyst text.",
+        )
+
+        script = self.generator.generate_gold_script(gold_data, gold_analysis)
+
+        # Should NOT contain "Stagnan Rp 0/gram"
+        self.assertNotIn("Stagnan Rp 0", script)
+        self.assertNotIn("stagnan Rp 0", script.lower())
+
+        # Should only show the price, not the change line
+        self.assertIn("Rp 2.944.000/gram.", script)
+        self.assertIn("Rp 2.649.600/gram.", script)
+
+    def test_generate_gold_script_naik_shows_change_line(self):
+        """Test that naik prices show change line."""
+        gold_data = GoldData(
+            title="Harga Emas Antam Naik",
+            antam_price=2944000.0,
+            antam_change=28000.0,
+            antam_trend="naik",
+            buyback_price=2725000.0,
+            buyback_change=31000.0,
+            global_gold_usd=2000.0,
+            global_gold_change_pct=0.5,
+            date="20 Februari 2026",
+            content="Test content",
+        )
+        gold_analysis = GoldAnalysis(
+            global_correlation="Korelasi text.",
+            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
+            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
+            price_catalysts="Catalyst text.",
+        )
+
+        script = self.generator.generate_gold_script(gold_data, gold_analysis)
+
+        # Should contain the change line
+        self.assertIn("Naik Rp28.000/gram dari hari sebelumnya", script)
+        self.assertIn("Naik Rp31.000/gram dari sebelumnya", script)
+
+    def test_generate_gold_script_turun_shows_change_line(self):
+        """Test that turun prices show change line."""
+        gold_data = GoldData(
+            title="Harga Emas Antam Turun",
+            antam_price=2944000.0,
+            antam_change=-15000.0,
+            antam_trend="turun",
+            buyback_price=2649600.0,
+            buyback_change=-20000.0,
+            global_gold_usd=2000.0,
+            global_gold_change_pct=-0.3,
+            date="20 Februari 2026",
+            content="Test content",
+        )
+        gold_analysis = GoldAnalysis(
+            global_correlation="Korelasi text.",
+            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
+            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
+            price_catalysts="Catalyst text.",
+        )
+
+        script = self.generator.generate_gold_script(gold_data, gold_analysis)
+
+        # Should contain the change line with Turun
+        self.assertIn("Turun Rp15.000/gram dari hari sebelumnya", script)
+        self.assertIn("Turun Rp20.000/gram dari sebelumnya", script)
 
 
 class TestTelegramFormatting(unittest.TestCase):
