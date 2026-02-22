@@ -227,22 +227,23 @@ PERKIRAAN KENAIKAN HARGA EMAS DUNIA
         header = f"📊 <b>SCRIPT {script_type.upper()}</b> 📊\n\n"
         footer = "\n\n────────────────────\nℹ️ <i>Data dari BloombergTechnoz.com</i>"
 
+        # Remove separator lines before processing
+        script = script.replace("****", "")
+
         # Escape HTML special characters
         escaped_script = script.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-        # Convert markdown-style formatting to HTML
-        escaped_script = escaped_script.replace("**", "<b>").replace("__", "<i>")
-        
         # Handle bold titles (JUDUL : ...)
         import re
         escaped_script = re.sub(r'JUDUL : (.+)', r'<b>JUDUL : \1</b>', escaped_script)
-        
+
         # Handle section headers (ALL CAPS lines)
         lines = escaped_script.split('\n')
         formatted_lines = []
         for line in lines:
-            if line.isupper() and len(line) > 3:
-                formatted_lines.append(f"<b>{line}</b>")
+            stripped = line.strip()
+            if stripped.isupper() and len(stripped) > 3:
+                formatted_lines.append(f"<b>{stripped}</b>")
             else:
                 formatted_lines.append(line)
         escaped_script = '\n'.join(formatted_lines)

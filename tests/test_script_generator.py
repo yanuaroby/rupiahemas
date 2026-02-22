@@ -294,7 +294,7 @@ class TestTelegramFormatting(unittest.TestCase):
         formatted = self.generator.format_for_telegram(script, "Rupiah")
 
         self.assertIn("📊", formatted)
-        self.assertIn("*SCRIPT RUPIAH*", formatted)
+        self.assertIn("<b>SCRIPT RUPIAH</b>", formatted)
 
     def test_format_for_telegram_adds_footer(self):
         """Test Telegram formatting adds footer."""
@@ -303,13 +303,19 @@ class TestTelegramFormatting(unittest.TestCase):
 
         self.assertIn("BloombergTechnoz.com", formatted)
 
-    def test_format_for_telegram_escapes_special_chars(self):
-        """Test Telegram formatting escapes special characters."""
-        script = "Test_with*special[chars]"
+    def test_format_for_telegram_removes_separator(self):
+        """Test Telegram formatting removes **** separator."""
+        script = "Test **** content"
         formatted = self.generator.format_for_telegram(script, "Rupiah")
 
-        self.assertIn("\\_", formatted)
-        self.assertIn("\\*", formatted)
+        self.assertNotIn("****", formatted)
+
+    def test_format_for_telegram_bold_headers(self):
+        """Test Telegram formatting makes ALL CAPS headers bold."""
+        script = "HARGA EMAS ANTAM\ntest content"
+        formatted = self.generator.format_for_telegram(script, "Gold")
+
+        self.assertIn("<b>HARGA EMAS ANTAM</b>", formatted)
 
 
 class TestScriptWithMissingData(unittest.TestCase):
