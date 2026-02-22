@@ -310,16 +310,19 @@ class BloombergTechnozScraper:
 
         # Extract current rate (penutupan or current)
         current_patterns = [
-            r"ditutup[\s\w]+?Rp\s*([\d\.]+)\s*/\s*US\$",
-            r"penutupan[\s\w]+?Rp\s*([\d\.]+)\s*/\s*US\$",
-            r"bergerak[\s\w]+?([\d\.]+)\s*/\s*US\$",
-            r"berada[\s\w]+?([\d\.]+)\s*/\s*US\$",
-            r"diperdagangkan[\s\w]+?([\d\.]+)\s*/\s*US\$",
-            r"rupiah dihargai\s*([\d\.]+)\s*/\s*US\$",
-            r"menguat[\s\w]+?ke\s+posisi\s+Rp\s*([\d\.]+)\s*/\s*US\$",
-            r"melemah[\s\w]+?ke\s+posisi\s+Rp\s*([\d\.]+)\s*/\s*US\$",
-            r"di\s+posisi\s+Rp\s*([\d\.]+)\s*/\s*US\$",
-            r"Rp\s*([\d\.]+)\s*/\s*US\$[\s\w]+,?\s+setelah",
+            r"ditutup[\s\w]+?Rp\s*([\d\.]+)\s*/US\$",
+            r"penutupan[\s\w]+?Rp\s*([\d\.]+)\s*/US\$",
+            r"bergerak[\s\w]+?(?:ke\s+angka|ke\s+posisi|di)\s*(?:Rp\s*)?([\d\.]+)\s*/US\$",
+            r"berada[\s\w]+?Rp\s*([\d\.]+)\s*/US\$",
+            r"diperdagangkan[\s\w]+?Rp\s*([\d\.]+)\s*/US\$",
+            r"rupiah dihargai\s*Rp\s*([\d\.]+)\s*/US\$",
+            r"menguat[\s\w]+?ke\s+posisi\s+Rp\s*([\d\.]+)\s*/US\$",
+            r"melemah[\s\w]+?ke\s+posisi\s+Rp\s*([\d\.]+)\s*/US\$",
+            r"di\s+posisi\s+Rp\s*([\d\.]+)\s*/US\$",
+            r"Rp\s*([\d\.]+)\s*/US\$[\s\w]+,?\s+setelah",
+            r"Rp\s*([\d\.]+)\s*/US\$\s+sore ini",
+            r"ke\s+posisi\s+Rp\s*([\d\.]+)\s*/US\$",
+            r"Rp([\d\.]+)/US",
         ]
         for pattern in current_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
@@ -468,19 +471,33 @@ class BloombergTechnozScraper:
 
         # Extract global gold price
         global_patterns = [
-            r"emas dunia[\s\w]+?US\$\s*(\d+\.?\d*)",
-            r"global[\s\w]+?US\$\s*(\d+\.?\d*)",
-            r"spot[\s\w]+?US\$\s*(\d+\.?\d*)",
-            r"XAU/USD[\s\w]+?(\d+\.?\d*)",
+            r"US\$\s*([\d\.]+,\d+)\s*/troy",  # European format: 4.997,7
+            r"US\$\s*([\d\.]+)\s*/troy",       # With thousand separator: 4.997
+            r"di\s+US\$\s*([\d\.]+,\d+)",      # European format without /troy
+            r"emas dunia[\s\w]+?US\$\s*([\d\.]+,\d+)",
+            r"emas dunia[\s\w]+?US\$\s*([\d\.]+)",
+            r"global[\s\w]+?US\$\s*([\d\.]+,\d+)",
+            r"global[\s\w]+?US\$\s*([\d\.]+)",
+            r"spot[\s\w]+?US\$\s*([\d\.]+,\d+)",
+            r"spot[\s\w]+?US\$\s*([\d\.]+)",
+            r"XAU/USD[\s\w]+?([\d\.]+,\d+)",
+            r"XAU/USD[\s\w]+?([\d\.]+)",
         ]
         for pattern in global_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
-                data["global_gold_usd"] = float(match.group(1).replace(",", ""))
+                raw_value = match.group(1)
+                # Convert European format (4.997,7) to US format (4997.7)
+                # Remove dots (thousand separator), replace comma with dot (decimal)
+                normalized = raw_value.replace(".", "").replace(",", ".")
+                data["global_gold_usd"] = float(normalized)
                 break
 
         # Extract global gold percentage change
         global_pct_patterns = [
+            r"(bertambah|berkurang)\s+([\d,]+)\s*%",           # Bertambah 0,43%
+            r"([\d,]+)\s*%\s*(?:dari hari sebelumnya)",         # 0,43% dari hari sebelumnya
+            r"([+-]?\d+,\d+)\s*%",                               # European decimal: +0,43%
             r"([+-]?\d+\.?\d*)\s*%\s*(?:dari hari sebelumnya|pada.*sebelumnya)",
             r"(bertambah|berkurang)\s*([+-]?\d+\.?\d*)\s*%",
         ]
@@ -488,8 +505,11 @@ class BloombergTechnozScraper:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 try:
-                    data["global_gold_change_pct"] = float(match.group(1))
-                except ValueError:
+                    raw_value = match.group(2) if len(match.groups()) >= 2 else match.group(1)
+                    # Convert European format (0,43) to US format (0.43)
+                    normalized = raw_value.replace(",", ".")
+                    data["global_gold_change_pct"] = float(normalized)
+                except (ValueError, IndexError):
                     pass
                 break
 
