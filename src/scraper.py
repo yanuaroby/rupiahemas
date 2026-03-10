@@ -442,8 +442,8 @@ class BloombergTechnozScraper:
 
         # Extract Antam change
         change_patterns = [
-            r"(naik|turun)\s*Rp\s*(\d+\.?\d*)\s*/\s*gram",
-            r"(naik|turun)\s*Rp\s*(\d+\.?\d*)",
+            r"(naik|turun|menguat|melemah|bertambah|berkurang)\s*Rp\s*(\d+\.?\d*)\s*/\s*gram",
+            r"(naik|turun|menguat|melemah|bertambah|berkurang)\s*Rp\s*(\d+\.?\d*)",
             r"([+-]\s*Rp\s*\d+\.?\d*)",
         ]
         for pattern in change_patterns:
@@ -454,7 +454,8 @@ class BloombergTechnozScraper:
                         trend = match.group(1).lower()
                         change_str = match.group(2).replace(".", "")
                         change = float(change_str)
-                        if trend == "turun":
+                        # Map trend words to direction
+                        if trend in ["turun", "melemah", "berkurang"]:
                             change *= -1
                         data["antam_change"] = change
                     else:
@@ -464,35 +465,72 @@ class BloombergTechnozScraper:
                     pass
                 break
 
-        # Extract buyback price
+        # Extract buyback price - try most specific patterns first
         buyback_patterns = [
-            r"buyback[\s\w]+?Rp\s*(\d+\.?\d*)",
-            r"harga buyback[\s\w]+?Rp\s*(\d+\.?\d*)",
-            r"Rp\s*(\d+\.?\d*)\s*/\s*gram.*buyback",
+            r"pembelian kembali.*?Rp\s*(\d[\d\.]*)\s*/\s*gram",  # Most specific: "pembelian kembali (buyback) ... Rp 2.802.000/gram"
+            r"ada di Rp\s*(\d[\d\.]*)\s*/\s*gram",  # "ada di Rp 2.802.000/gram"
+            r"buyback[\s\w]+?Rp\s*(\d[\d\.]*)\s*/\s*gram",  # "buyback ... Rp X/gram"
+            r"harga buyback[\s\w]+?Rp\s*(\d[\d\.]*)\s*/\s*gram",  # "harga buyback ... Rp X/gram"
         ]
         for pattern in buyback_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
+                # Remove ALL dots (Indonesian thousand separator)
                 price_str = match.group(1).replace(".", "")
-                data["buyback_price"] = float(price_str)
+                # Need at least 4 digits for valid price (e.g., 2802000)
+                if len(price_str) >= 4:
+                    data["buyback_price"] = float(price_str)
+                    break
+
+        # Extract buyback change - look for it AFTER buyback price context
+        buyback_change_patterns = [
+            r"buyback[\s\w]+?bertambah\s*Rp\s*(\d+\.?\d*)",  # Specific to buyback
+            r"buyback[\s\w]+?berkurang\s*Rp\s*(\d+\.?\d*)",
+            r"pembelian kembali[\s\w]+?bertambah\s*Rp\s*(\d+\.?\d*)",
+            r"pembelian kembali[\s\w]+?berkurang\s*Rp\s*(\d+\.?\d*)",
+            r"bertambah\s*Rp\s*(\d+\.?\d*)\s*dibandingkan.*?sebelumnya",  # General "bertambah" with context
+            r"berkurang\s*Rp\s*(\d+\.?\d*)\s*dibandingkan.*?sebelumnya",
+        ]
+        for pattern in buyback_change_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                try:
+                    change_str = match.group(1).replace(".", "")
+                    change = float(change_str)
+                    # Check if pattern contains "berkurang" for negative
+                    if "berkurang" in pattern.lower():
+                        change *= -1
+                    data["buyback_change"] = change
+                except ValueError:
+                    pass
                 break
 
-        # Extract global gold price
+        # Extract global gold price - prefer latest price (morning/today over closing)
         global_patterns = [
-            r"US\$\s*([\d\.]+,\d+)\s*/troy",  # European format: 4.997,7
-            r"US\$\s*([\d\.]+)\s*/troy",       # With thousand separator: 4.997
-            r"di\s+US\$\s*([\d\.]+,\d+)",      # European format without /troy
-            r"emas dunia[\s\w]+?US\$\s*([\d\.]+,\d+)",
-            r"emas dunia[\s\w]+?US\$\s*([\d\.]+)",
-            r"global[\s\w]+?US\$\s*([\d\.]+,\d+)",
-            r"global[\s\w]+?US\$\s*([\d\.]+)",
-            r"spot[\s\w]+?US\$\s*([\d\.]+,\d+)",
-            r"spot[\s\w]+?US\$\s*([\d\.]+)",
-            r"XAU/USD[\s\w]+?([\d\.]+,\d+)",
-            r"XAU/USD[\s\w]+?([\d\.]+)",
+            # Priority 1: Most specific morning patterns with percentage context
+            r"melemah\s+[\d,]+%\s+ke\s+([\d\.]+,\d+)\s*/troy",  # "melemah 0,11% ke 5.133,7/troy"
+            r"menguat\s+[\d,]+%\s+ke\s+([\d\.]+,\d+)\s*/troy",  # "menguat X% ke Y/troy"
+            # Priority 2: Morning/today price patterns (with DOTALL for multiline)
+            r"pagi ini.*?Selasa.*?([\d\.]+,\d+)\s*/troy",  # "Pagi ini, Selasa ... 5.133,7/troy"
+            r"masih melemah.*?([\d\.]+,\d+)\s*/troy",  # "masih melemah ... X/troy"
+            r"masih menguat.*?([\d\.]+,\d+)\s*/troy",  # "masih menguat ... X/troy"
+            r"pada pukul\s+\d{1,2}:\d{2}.*?([\d\.]+,\d+)\s*/troy",  # Price with timestamp
+            # Priority 3: General patterns (closing price)
+            r"([\d\.]+,\d+)\s*/troy\s*ons",  # European format: 5.129,5/troy ons
+            r"US.*?([\d\.]+,\d+)\s*/troy",  # With US prefix
+            r"US.*?([\d\.]+)",       # US with number
+            r"di\s+([\d\.]+,\d+)",      # European format without /troy
+            r"emas dunia.*?([\d\.]+,\d+)",
+            r"emas dunia.*?([\d\.]+)",
+            r"global.*?([\d\.]+,\d+)",
+            r"global.*?([\d\.]+)",
+            r"spot.*?([\d\.]+,\d+)",
+            r"spot.*?([\d\.]+)",
+            r"XAU/USD.*?([\d\.]+,\d+)",
+            r"XAU/USD.*?([\d\.]+)",
         ]
         for pattern in global_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
+            match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
             if match:
                 raw_value = match.group(1)
                 # Convert European format (4.997,7) to US format (4997.7)
@@ -501,22 +539,56 @@ class BloombergTechnozScraper:
                 data["global_gold_usd"] = float(normalized)
                 break
 
-        # Extract global gold percentage change
+        # Extract global gold percentage change - prefer most recent (morning/today)
         global_pct_patterns = [
-            r"(bertambah|berkurang)\s+([\d,]+)\s*%",           # Bertambah 0,43%
-            r"([\d,]+)\s*%\s*(?:dari hari sebelumnya)",         # 0,43% dari hari sebelumnya
-            r"([+-]?\d+,\d+)\s*%",                               # European decimal: +0,43%
+            # Priority 1: Morning/today percentage patterns (with DOTALL for multiline)
+            r"pagi ini.*?melemah\s+([\d,]+)\s*%",  # pagi ini ... melemah 0,11%
+            r"pagi ini.*?menguat\s+([\d,]+)\s*%",   # pagi ini ... menguat X%
+            r"masih melemah\s+([\d,]+)\s*%",  # masih melemah 0,11%
+            r"masih menguat\s+([\d,]+)\s*%",  # masih menguat X%
+            # Priority 2: Percentage with ke US$ pattern (indicates current price)
+            r"melemah\s+([\d,]+)%\s+ke\s+US",  # melemah 0,11% ke US$
+            r"menguat\s+([\d,]+)%\s+ke\s+US",  # menguat X% ke US$
+            # Priority 3: General trend word patterns
+            r"(terpangkas|melemah|turun)\s+([\d,]+)\s*%",  # Terpangkas 0,38% / Melemah 0,11%
+            r"(bertambah|menguat|naik)\s+([\d,]+)\s*%",     # Bertambah 0,43% / Menguat 0,5%
+            # Existing patterns with +/- signs
+            r"([+-]?\d+,\d+)\s*%",                           # European decimal: +0,43%
+            r"([\d,]+)\s*%\s*(?:dari hari sebelumnya)",      # 0,43% dari hari sebelumnya
             r"([+-]?\d+\.?\d*)\s*%\s*(?:dari hari sebelumnya|pada.*sebelumnya)",
-            r"(bertambah|berkurang)\s*([+-]?\d+\.?\d*)\s*%",
         ]
         for pattern in global_pct_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
+            match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
             if match:
                 try:
-                    raw_value = match.group(2) if len(match.groups()) >= 2 else match.group(1)
-                    # Convert European format (0,43) to US format (0.43)
-                    normalized = raw_value.replace(",", ".")
-                    data["global_gold_change_pct"] = float(normalized)
+                    groups = match.groups()
+                    if len(groups) >= 2 and groups[0]:
+                        # Pattern with trend word
+                        trend_word = groups[0].lower()
+                        pct_str = groups[1].replace(",", ".")
+                        pct_value = float(pct_str)
+                        # Determine sign based on trend word
+                        if trend_word in ["terpangkas", "melemah", "turun", "berkurang"]:
+                            pct_value = -pct_value
+                        data["global_gold_change_pct"] = pct_value
+                    elif len(groups) == 1:
+                        # Pattern without trend word (just percentage)
+                        raw_value = groups[0]
+                        normalized = raw_value.replace(",", ".")
+                        pct_value = float(normalized)
+                        # Check if pattern contains negative indicators
+                        if "turun" in match.group(0).lower() or "terpangkas" in match.group(0).lower() or "melemah" in match.group(0).lower():
+                            pct_value = -abs(pct_value)
+                        data["global_gold_change_pct"] = pct_value
+                    else:
+                        # Pattern with just number or +/- sign
+                        raw_value = match.group(1)
+                        normalized = raw_value.replace(",", ".")
+                        pct_value = float(normalized)
+                        # Check if pattern contains negative indicators
+                        if "turun" in match.group(0).lower() or "terpangkas" in match.group(0).lower():
+                            pct_value = -abs(pct_value)
+                        data["global_gold_change_pct"] = pct_value
                 except (ValueError, IndexError):
                     pass
                 break
@@ -577,6 +649,66 @@ class BloombergTechnozScraper:
 
         return None
 
+    def _search_global_gold_articles(self, max_results: int = 3) -> List[str]:
+        """Search for global gold price articles."""
+        # Try multiple keywords
+        keywords = ["emas dunia", "harga emas turun", "harga emas naik", "gold"]
+        
+        for keyword in keywords:
+            urls = self._search_articles(keyword, prefer_weekday=True)
+            if urls:
+                # Return top results
+                return urls[:max_results]
+        
+        return []
+
+    def _merge_global_gold_data(self, gold_data: GoldData) -> GoldData:
+        """
+        If GoldData doesn't have global gold price, search for it from
+        a separate global gold article published on the same day.
+        """
+        # Check if we already have global gold data
+        if gold_data.global_gold_usd and gold_data.global_gold_change_pct:
+            return gold_data
+        
+        print("  No global gold data in Antam article, searching for global gold article...")
+        
+        # Search for global gold articles
+        global_urls = self._search_global_gold_articles()
+        
+        for url in global_urls:
+            soup = self._fetch_page(url)
+            if not soup:
+                continue
+            
+            # Extract content
+            content = self._extract_article_content(soup)
+            if not content:
+                continue
+            
+            # Parse global gold data from content
+            parsed = self._parse_gold_from_content(content)
+            
+            # Check if we found global gold data
+            if parsed["global_gold_usd"] and parsed["global_gold_change_pct"]:
+                print(f"  ✓ Found global gold data: US$ {parsed['global_gold_usd']}, {parsed['global_gold_change_pct']}%")
+                # Merge data
+                return GoldData(
+                    title=gold_data.title,
+                    antam_price=gold_data.antam_price,
+                    antam_change=gold_data.antam_change,
+                    antam_trend=gold_data.antam_trend,
+                    buyback_price=gold_data.buyback_price,
+                    buyback_change=gold_data.buyback_change,
+                    global_gold_usd=parsed["global_gold_usd"],
+                    global_gold_change_pct=parsed["global_gold_change_pct"],
+                    date=gold_data.date,
+                    content=gold_data.content + " " + content[:500],  # Append global gold content
+                )
+        
+        print("  ✗ No global gold data found in related articles")
+        return gold_data
+
     def scrape_gold(self) -> Optional[GoldData]:
         """Scrape latest Gold (Antam) news and data."""
         # Search specifically for "antam" articles
@@ -622,7 +754,7 @@ class BloombergTechnozScraper:
                     if content and "antam" in content.lower():
                         urls.append(url)
                         break
-        
+
         for url in urls:
             soup = self._fetch_page(url)
             if not soup:
@@ -657,7 +789,7 @@ class BloombergTechnozScraper:
                     article_date = self._extract_article_date(soup)
                     date = article_date if article_date else datetime.now().strftime("%d %B %Y")
 
-                return GoldData(
+                gold_data = GoldData(
                     title=title,
                     antam_price=parsed["antam_price"],
                     antam_change=parsed["antam_change"],
@@ -669,5 +801,11 @@ class BloombergTechnozScraper:
                     date=date,
                     content=content,
                 )
+                
+                # If no global gold data, try to merge from another article
+                if not gold_data.global_gold_usd or not gold_data.global_gold_change_pct:
+                    gold_data = self._merge_global_gold_data(gold_data)
+                
+                return gold_data
 
         return None
