@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .config import BASE_URL, HEADERS, REQUEST_TIMEOUT, RUPIAH_KEYWORD, GOLD_KEYWORD
 
@@ -48,16 +49,21 @@ class BloombergTechnozScraper:
     """Scraper for BloombergTechnoz.com financial data."""
 
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update(HEADERS)
+        # Use httpx Client with HTTP/2 support and connection pooling
+        self.client = httpx.Client(http2=True, headers=HEADERS, timeout=REQUEST_TIMEOUT)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True
+    )
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
-        """Fetch and parse a web page."""
+        """Fetch and parse a web page with automatic retry."""
         try:
-            response = self.session.get(url, timeout=REQUEST_TIMEOUT)
+            response = self.client.get(url)
             response.raise_for_status()
             return BeautifulSoup(response.text, "html.parser")
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             print(f"Error fetching {url}: {e}")
             return None
 
@@ -398,7 +404,9 @@ class BloombergTechnozScraper:
             if match:
                 try:
                     pct = float(match.group(1))
-                    asian_currencies.append({"name": name, "change_pct": pct})
+                    # Determine trend based on percentage sign
+                    trend = "melemah" if pct < 0 else "menguat"
+                    asian_currencies.append({"name": name, "change_pct": pct, "trend": trend})
                 except ValueError:
                     pass
 

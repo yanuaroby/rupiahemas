@@ -4,8 +4,9 @@ Loads environment variables and defines constants.
 """
 
 import os
+from zoneinfo import ZoneInfo
+
 from dotenv import load_dotenv
-import pytz
 
 # Load environment variables from .env file (for local development)
 load_dotenv()
@@ -23,9 +24,9 @@ BASE_URL = "https://www.bloombergtechnoz.com"
 RUPIAH_KEYWORD = "rupiah"
 GOLD_KEYWORD = "antam"  # Specifically search for Antam articles
 
-# Timezone configuration
-WIB_TIMEZONE = pytz.timezone("Asia/Jakarta")
-UTC_TIMEZONE = pytz.utc
+# Timezone configuration (using built-in zoneinfo - Python 3.9+)
+WIB_TIMEZONE = ZoneInfo("Asia/Jakarta")
+UTC_TIMEZONE = ZoneInfo("UTC")
 
 # Groq model configuration (updated - old model was decommissioned)
 GROQ_MODEL = "llama-3.3-70b-versatile"

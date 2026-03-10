@@ -16,10 +16,14 @@ from .scraper import RupiahData, GoldData
 class RupiahAnalysis:
     """Analysis results for Rupiah script."""
 
-    external_analysis: str  # 2-4 sentences on external/macro factors
-    asian_currencies_text: str  # Formatted Asian currencies list
-    global_domestic_analysis: str  # 2-4 sentences on global/domestic factors
-    forecast_range: str  # Predicted price range
+    context_1: str  # Faktor eksternal (indeks dolar, The Fed)
+    context_2: str  # Dampak ke mata uang Asia
+    context_3: str  # Sentimen global (minyak, geopolitik)
+    context_4: str  # Faktor domestik
+    context_5: str  # Dampak/khawatiran pelaku pasar
+    asian_currencies: list  # List of dicts: [{name, change_pct, trend}, ...]
+    forecast_low: str  # Lower bound forecast
+    forecast_high: str  # Upper bound forecast
 
 
 @dataclass
@@ -76,36 +80,37 @@ class GroqSummarizer:
             f"Para investor terus memantau kebijakan bank sentral AS The Fed terkait suku bunga."
         )
 
-        # Format Asian currencies
-        if data.asian_currencies:
-            currencies_text = ", ".join(
-                [f"{c['name']} ({c['change_pct']:+.2f}%)" for c in data.asian_currencies]
-            )
-        else:
-            currencies_text = "Data mata uang Asia tidak tersedia"
-
-        # Global/domestic analysis
-        global_domestic = (
-            "Faktor domestik juga berperan dalam pergerakan rupiah hari ini. "
-            "Kondisi ekonomi dalam negeri dan arus modal asing mempengaruhi sentimen pasar. "
-            "Bank Indonesia diperkirakan akan terus menjaga stabilitas nilai tukar."
-        )
-
         # Forecast based on current rate
         if data.current_rate:
             base = data.current_rate
             low = int(base - 50)
             high = int(base + 50)
-            forecast = f"Rp {low:,} - Rp {high:,}/US$"
+            forecast_low = f"{low:,}".replace(",", ".")
+            forecast_high = f"{high:,}".replace(",", ".")
         else:
-            forecast = "Rp 16.900 - Rp 17.000/US$"
+            forecast_low = "16.900"
+            forecast_high = "17.000"
 
         return RupiahAnalysis(
-            external_analysis=external_analysis,
-            asian_currencies_text=currencies_text,
-            global_domestic_analysis=global_domestic,
-            forecast_range=forecast,
+            context_1="Pergerakan rupiah dipengaruhi oleh penguatan indeks dolar AS yang terjadi hari ini. The Fed diperkirakan akan mempertahankan suku bunga acuan pada level saat ini.",
+            context_2=f"Penguatan dolar ini membuat mayoritas mata uang Asia melemah. {self._format_asian_currencies_context(data.asian_currencies)}",
+            context_3="Sentimen pasar global yang tidak menentu akibat fluktuasi harga minyak mentah dunia menjadi tekanan tambahan bagi rupiah.",
+            context_4="Dari sisi domestik, kondisi ekonomi dalam negeri masih menunjukkan resiliensi meski ada tekanan dari faktor eksternal.",
+            context_5="Pelaku pasar khawatir dengan kondisi fiskal dan menunggu langkah Bank Indonesia dalam menjaga stabilitas nilai tukar.",
+            asian_currencies=data.asian_currencies,
+            forecast_low=forecast_low,
+            forecast_high=forecast_high,
         )
+
+    def _format_asian_currencies_context(self, asian_currencies: list) -> str:
+        """Format Asian currencies for context text."""
+        if not asian_currencies:
+            return "Data mata uang Asia tidak tersedia."
+        
+        # Find weakest currency
+        weakest = min(asian_currencies, key=lambda x: x.get('change_pct', 0))
+        weakest_name = weakest.get('name', 'Mata uang')
+        return f"{weakest_name} menjadi valuta Asia terlemah pagi ini."
 
     def _generate_gold_fallback_analysis(
         self, data: GoldData, rupiah_rate: Optional[float]
@@ -152,7 +157,7 @@ class GroqSummarizer:
     def analyze_rupiah(self, data: RupiahData) -> RupiahAnalysis:
         """Generate analysis for Rupiah data using LLM or fallback."""
         prompt = f"""
-Berdasarkan data berikut, buat analisis finansial profesional dalam bahasa Indonesia:
+Berdasarkan data berikut, buat analisis finansial profesional dalam bahasa Indonesia untuk script TikTok/Reels:
 
 JUDUL: {data.title}
 TREND: {data.trend}
@@ -166,25 +171,44 @@ KONTEN BERITA:
 {data.content[:1500]}
 
 Tugas:
-1. Buat 2-4 kalimat analisis faktor eksternal (indeks dolar, The Fed, pasar global)
-2. Format daftar mata uang Asia dengan persentase
-3. Buat 2-4 kalimat analisis faktor global/domestik
-4. Berikan perkiraan range pelemahan/penguatan rupiah
+1. Buat 5 kalimat analisis terpisah dengan struktur:
+   - Konteks 1: Faktor eksternal (indeks dolar AS, The Fed, pasar global)
+   - Konteks 2: Dampak ke mata uang Asia (sebutkan yang terlemah)
+   - Konteks 3: Sentimen global (minyak mentah, geopolitik)
+   - Konteks 4: Faktor domestik (ekonomi dalam negeri, kebijakan pemerintah)
+   - Konteks 5: Dampak/khawatiran pelaku pasar
+
+2. Extract semua mata uang Asia yang ada di artikel dengan format: nama, persentase, trend (melemah/menguat)
+
+3. Berikan perkiraan range pelemahan/penguatan rupiah (low dan high)
 
 Format output (gunakan pemisah |):
-[Analisis Eksternal]|[Mata Uang Asia]|[Analisis Global/Domestik]|[Forecast Range]
+[Konteks 1]|[Konteks 2]|[Konteks 3]|[Konteks 4]|[Konteks 5]|[Mata Uang Asia JSON]|[Forecast Low]|[Forecast High]
+
+Contoh Mata Uang Asia JSON:
+[{{"name": "Peso Filipina", "change_pct": -0.5, "trend": "melemah"}}, {{"name": "Yen Jepang", "change_pct": -0.3, "trend": "melemah"}}]
 """
 
         response = self._generate_with_groq(prompt)
 
         if response and "|" in response:
             parts = response.split("|")
-            if len(parts) >= 4:
+            if len(parts) >= 8:
+                import json
+                try:
+                    asian_currencies = json.loads(parts[5].strip())
+                except (json.JSONDecodeError, ValueError):
+                    asian_currencies = data.asian_currencies
+                
                 return RupiahAnalysis(
-                    external_analysis=parts[0].strip(),
-                    asian_currencies_text=parts[1].strip(),
-                    global_domestic_analysis=parts[2].strip(),
-                    forecast_range=parts[3].strip(),
+                    context_1=parts[0].strip(),
+                    context_2=parts[1].strip(),
+                    context_3=parts[2].strip(),
+                    context_4=parts[3].strip(),
+                    context_5=parts[4].strip(),
+                    asian_currencies=asian_currencies,
+                    forecast_low=parts[6].strip(),
+                    forecast_high=parts[7].strip(),
                 )
 
         # Use fallback if LLM fails

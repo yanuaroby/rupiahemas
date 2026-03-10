@@ -6,8 +6,6 @@ Generates Rupiah and Gold scripts following the specified templates.
 from datetime import datetime
 from typing import Optional
 
-import pytz
-
 from .scraper import RupiahData, GoldData
 from .summarizer import RupiahAnalysis, GoldAnalysis
 from .config import WIB_TIMEZONE
@@ -51,22 +49,49 @@ class ScriptGenerator:
 
         return day_map.get(day_name, day_name), date_str
 
+    def _generate_catchy_rupiah_title(self, original_title: str, trend: str, percentage: float) -> str:
+        """Generate a catchy title for Rupiah script that attracts viewers."""
+        trend_word = "MELEMAH" if trend == "melemah" else "MENGUAT" if trend == "menguat" else "BERGEJOLAK"
+        pct_abs = abs(percentage) if percentage else 0
+        
+        # Create attention-grabbing title
+        if pct_abs >= 0.5:
+            return f"RUPIAH {trend_word} {pct_abs:.2f}%! INI PENYEBAB UTAMANYA"
+        elif pct_abs > 0:
+            return f"RUPIAH {trend_word} {pct_abs:.2f}%, PENGAMAT BILANG INI DIA PENYEBABNYA"
+        else:
+            return f"RUPIAH STAGNAN, ANALIS PREDIKSI AKAN GERAK KE ARAH INI"
+
     def generate_rupiah_script(
         self, data: RupiahData, analysis: RupiahAnalysis
     ) -> str:
         """
-        Generate Rupiah script following the template.
+        Generate Rupiah script following the new template.
 
         Template:
-        JUDUL : [JUDUL DARI WEBSITE] Nilai tukar rupiah melemah atau menguat dalam pembukaan perdagangan hari ini.
-        [Hari], [Tanggal], rupiah dihargai [Nilai]/US$. Kemudian pada pukul [Waktu] WIB, rupiah bergerak ke angka [Nilai]/US$.
-        NILAI TUKAR RUPIAH [Nilai]/US$ [Melemah/Menguat] [X]% dari sebelumnya
+        JUDUL : (judul tegas & menarik)
 
-        [2-4 Kalimat Analisis Faktor Eksternal]
-        NILAI TUKAR MATA UANG ASIA [List Mata Uang & Persentase]
+        Nilai tukar rupiah melemah dalam pembukaan perdagangan hari ini
 
-        [2-4 Kalimat Analisis Global/Domestik]
-        PERKIRAAN PELEMAHAN RUPIAH [Range Harga]
+        Pada (tanggal) rupiah dihargai Rp(berapa)/US$
+
+        Kemudian pada pukul (waktu) WIB, rupiah berada di angka Rp(berapa)/US$
+
+        NILAI TUKAR RUPIAH (tanggal)
+
+        Rp(berapa)/US$
+        Melemah/Menguat (berapa)% dari sebelumnya
+
+        ****
+        (konteks 1-5)
+
+        NILAI TUKAR MATA UANG ASIA (tanggal)
+
+        (mata uang negara) melemah/menguat (berapa)%.
+
+        PERKIRAAN PELEMAHAN RUPIAH (tanggal)
+
+        Rp(berapa) Hingga Rp(berapa).
         """
         day_name, date_str = self._get_current_day_date()
 
@@ -74,25 +99,69 @@ class ScriptGenerator:
         current_rate = data.current_rate or data.opening_rate or 16000
         opening_rate = data.opening_rate or current_rate
         time_wib = data.time_wib or "10:00"
-        percentage = data.percentage_change or 0
+        percentage = data.percentage_change if data.percentage_change is not None else 0
         trend = data.trend or "melemah"
 
+        # Generate catchy title
+        catchy_title = self._generate_catchy_rupiah_title(data.title, trend, percentage)
+
+        # Format percentage with Indonesian decimal separator
+        pct_formatted = f"{abs(percentage):.2f}".replace(".", ",")
+
+        # Format Asian currencies section
+        asian_currencies_section = self._format_asian_currencies_section(analysis.asian_currencies, date_str)
+
         # Format the script
-        script = f"""JUDUL : {data.title}
+        script = f"""JUDUL : {catchy_title}
 
-Nilai tukar rupiah {trend} dalam pembukaan perdagangan hari ini. {day_name}, {date_str}, rupiah dihargai {self._format_number(opening_rate)}/US$. Kemudian pada pukul {time_wib} WIB, rupiah bergerak ke angka {self._format_number(current_rate)}/US$.
+Nilai tukar rupiah {trend} dalam pembukaan perdagangan hari ini
 
-NILAI TUKAR RUPIAH {self._format_number(current_rate)}/US$ {trend.capitalize()} {abs(percentage):.2f}% dari sebelumnya
+Pada {date_str} rupiah dihargai Rp{self._format_number(opening_rate)}/US$
 
-{analysis.external_analysis}
+Kemudian pada pukul {time_wib} WIB, rupiah berada di angka Rp{self._format_number(current_rate)}/US$
 
-NILAI TUKAR MATA UANG ASIA {analysis.asian_currencies_text}
+NILAI TUKAR RUPIAH {date_str}
 
-{analysis.global_domestic_analysis}
+Rp{self._format_number(current_rate)}/US$
+{trend.capitalize()} {pct_formatted}% dari sebelumnya
 
-PERKIRAAN PELEMAHAN RUPIAH {analysis.forecast_range}"""
+****
+{analysis.context_1}
+
+{analysis.context_2}
+
+{analysis.context_3}
+
+{analysis.context_4}
+
+{analysis.context_5}
+
+{asian_currencies_section}
+PERKIRAAN PELEMAHAN RUPIAH {date_str}
+
+Rp{analysis.forecast_low} Hingga Rp{analysis.forecast_high}."""
 
         return script.strip()
+
+    def _format_asian_currencies_section(self, asian_currencies: list, date_str: str) -> str:
+        """Format Asian currencies section with each currency on separate line."""
+        if not asian_currencies:
+            return f"NILAI TUKAR MATA UANG ASIA {date_str}\n\nData mata uang Asia tidak tersedia."
+        
+        header = f"NILAI TUKAR MATA UANG ASIA {date_str}\n\n"
+        lines = []
+        
+        for currency in asian_currencies:
+            name = currency.get('name', 'Mata Uang')
+            change_pct = currency.get('change_pct', 0)
+            trend = currency.get('trend', 'melemah' if change_pct < 0 else 'menguat')
+            
+            # Format percentage with Indonesian decimal separator
+            pct_formatted = f"{abs(change_pct):.2f}".replace(".", ",")
+            
+            lines.append(f"{name} {trend} {pct_formatted}%.")
+        
+        return header + "\n".join(lines)
 
     def _generate_gold_title(
         self, antam_trend: str, antam_change: float

@@ -1,33 +1,43 @@
 """
 Telegram bot module for sending financial scripts.
-Uses python-telegram-bot library with synchronous requests.
+Uses httpx for synchronous HTTP requests to Telegram Bot API.
 """
 
 from typing import Optional
-import requests
+
+import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
 class TelegramSender:
-    """Send messages via Telegram Bot using synchronous HTTP requests."""
+    """Send messages via Telegram Bot using httpx with retry logic."""
 
     def __init__(self, token: Optional[str] = None, chat_id: Optional[str] = None):
         # First try direct parameters, then fall back to config
         self.token = token or TELEGRAM_BOT_TOKEN
         self.chat_id = chat_id or TELEGRAM_CHAT_ID
-        
+
         # Debug print at initialization
         print(f"TelegramSender init: token={bool(self.token)}, chat_id={bool(self.chat_id)}")
-        
+
         # Build the API URL
         if self.token:
             self.api_url = f"https://api.telegram.org/bot{self.token}"
+            # Use httpx client with retry capability
+            self.client = httpx.Client(timeout=30)
             print(f"Bot API URL initialized")
         else:
             self.api_url = None
+            self.client = None
             print("Bot NOT initialized - no token")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True
+    )
     def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
         """
         Send a message to the configured chat using Telegram Bot API.
@@ -45,7 +55,7 @@ class TelegramSender:
         print(f"DEBUG: Token configured: {token_set}, Chat ID configured: {chat_id_set}")
         print(f"DEBUG: Token type: {type(self.token)}, Chat ID type: {type(self.chat_id)}")
         print(f"DEBUG: Chat ID value: {self.chat_id}")
-        
+
         if not self.token:
             print("ERROR: Telegram bot token is empty or not set")
             print("Check that TELEGRAM_BOT_TOKEN secret is configured in GitHub")
@@ -61,23 +71,23 @@ class TelegramSender:
             return False
 
         try:
-            # Use Telegram Bot API directly with requests
+            # Use Telegram Bot API directly with httpx
             url = f"{self.api_url}/sendMessage"
             chat_id_str = str(self.chat_id)
-            
+
             print(f"Attempting to send message to chat: {chat_id_str}")
             print(f"Message length: {len(message)} characters")
             print(f"Parse mode: {parse_mode}")
-            
+
             payload = {
                 "chat_id": chat_id_str,
                 "text": message,
                 "parse_mode": parse_mode
             }
-            
-            response = requests.post(url, json=payload, timeout=30)
+
+            response = self.client.post(url, json=payload)
             result = response.json()
-            
+
             if result.get("ok"):
                 print(f"✓ Message sent successfully to chat {chat_id_str}")
                 print(f"Telegram API response: {result}")
@@ -88,7 +98,7 @@ class TelegramSender:
                 print("Trying fallback without parse mode...")
                 payload["parse_mode"] = None
                 payload["text"] = message.replace("*", "").replace("_", "").replace("[", "").replace("]", "").replace("<", "").replace(">", "")
-                response = requests.post(url, json=payload, timeout=30)
+                response = self.client.post(url, json=payload)
                 result = response.json()
                 if result.get("ok"):
                     print("✓ Fallback succeeded")
@@ -96,8 +106,8 @@ class TelegramSender:
                 else:
                     print(f"✗ Fallback also failed: {result}")
                 return False
-                
-        except requests.RequestException as e:
+
+        except httpx.HTTPError as e:
             print(f"✗ Network error: {e}")
             return False
         except Exception as e:
@@ -112,18 +122,3 @@ class TelegramSender:
     def send_gold_script(self, script: str) -> bool:
         """Send Gold script to Telegram."""
         return self.send_message(script)
-
-    def test_connection(self) -> bool:
-        """Test the Telegram bot connection."""
-        if not self.bot:
-            print("Bot not initialized (missing token)")
-            return False
-
-        try:
-            # Get bot info to verify connection
-            bot_info = self.bot.get_me()
-            print(f"Connected to bot: @{bot_info.username}")
-            return True
-        except TelegramError as e:
-            print(f"Telegram connection error: {e}")
-            return False

@@ -36,6 +36,46 @@ class TestScriptGenerator(unittest.TestCase):
         valid_days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
         self.assertIn(day, valid_days)
 
+    def test_generate_catchy_rupiah_title_large_move(self):
+        """Test catchy title generation for large percentage moves."""
+        title = self.generator._generate_catchy_rupiah_title("Test", "melemah", 0.75)
+        self.assertIn("RUPIAH", title)
+        self.assertIn("MELEMAH", title)
+        self.assertIn("0.75%", title)  # Uses dot in title, comma in script body
+
+    def test_generate_catchy_rupiah_title_small_move(self):
+        """Test catchy title generation for small percentage moves."""
+        title = self.generator._generate_catchy_rupiah_title("Test", "menguat", 0.25)
+        self.assertIn("RUPIAH", title)
+        self.assertIn("MENGUAT", title)
+
+    def test_generate_catchy_rupiah_title_stagnan(self):
+        """Test catchy title generation for stagnan."""
+        title = self.generator._generate_catchy_rupiah_title("Test", "stagnan", 0)
+        self.assertIn("RUPIAH", title)
+        self.assertIn("STAGNAN", title)
+
+    def test_format_asian_currencies_section(self):
+        """Test Asian currencies section formatting."""
+        currencies = [
+            {"name": "Peso Filipina", "change_pct": -0.5, "trend": "melemah"},
+            {"name": "Yen Jepang", "change_pct": -0.3, "trend": "melemah"},
+        ]
+        section = self.generator._format_asian_currencies_section(currencies, "21 Februari 2026")
+        
+        self.assertIn("NILAI TUKAR MATA UANG ASIA", section)
+        self.assertIn("21 Februari 2026", section)
+        self.assertIn("Peso Filipina", section)
+        self.assertIn("melemah", section.lower())
+        self.assertIn("0,50%", section)
+
+    def test_format_asian_currencies_section_empty(self):
+        """Test Asian currencies section with empty data."""
+        section = self.generator._format_asian_currencies_section([], "21 Februari 2026")
+        
+        self.assertIn("NILAI TUKAR MATA UANG ASIA", section)
+        self.assertIn("tidak tersedia", section.lower())
+
 
 class TestRupiahScriptGeneration(unittest.TestCase):
     """Test Rupiah script generation."""
@@ -50,16 +90,24 @@ class TestRupiahScriptGeneration(unittest.TestCase):
             percentage_change=-0.62,
             trend="melemah",
             asian_currencies=[
-                {"name": "Yen", "change_pct": 0.2},
-                {"name": "Won", "change_pct": -0.3},
+                {"name": "Yen", "change_pct": 0.2, "trend": "menguat"},
+                {"name": "Won", "change_pct": -0.3, "trend": "melemah"},
             ],
             content="Test content about rupiah",
         )
         self.rupiah_analysis = RupiahAnalysis(
-            external_analysis="Indeks dolar AS menguat hari ini.",
-            asian_currencies_text="Yen (+0.20%), Won (-0.30%)",
-            global_domestic_analysis="Bank Indonesia menjaga stabilitas.",
-            forecast_range="Rp 16.050 - Rp 16.150/US$",
+            context_1="Pelemahan rupiah terjadi setelah indeks dolar AS menguat 0,7% ke 99,67.",
+            context_2="Penguatan ini membuat mayoritas mata uang Asia melemah. Peso Filipina menjadi valuta Asia terlemah pagi ini.",
+            context_3="Lonjakan harga minyak mentah dunia menjadi sentimen negatif rupiah.",
+            context_4="Dari sisi domestik, pemerintah masih belum mempertimbangkan kenaikan harga BBM bersubsidi.",
+            context_5="Hal ini justru membuat pelaku pasar khawatir dengan kondisi fiskal.",
+            asian_currencies=[
+                {"name": "Peso Filipina", "change_pct": -0.5, "trend": "melemah"},
+                {"name": "Yen Jepang", "change_pct": -0.3, "trend": "melemah"},
+                {"name": "Ringgit Malaysia", "change_pct": -0.2, "trend": "melemah"},
+            ],
+            forecast_low="16.050",
+            forecast_high="16.150",
         )
 
     def test_generate_rupiah_script_structure(self):
@@ -73,13 +121,16 @@ class TestRupiahScriptGeneration(unittest.TestCase):
         self.assertIn("NILAI TUKAR RUPIAH", script)
         self.assertIn("NILAI TUKAR MATA UANG ASIA", script)
         self.assertIn("PERKIRAAN PELEMAHAN RUPIAH", script)
+        self.assertIn("****", script)
 
-    def test_generate_rupiah_script_contains_title(self):
-        """Test Rupiah script contains the title."""
+    def test_generate_rupiah_script_catchy_title(self):
+        """Test Rupiah script generates catchy title."""
         script = self.generator.generate_rupiah_script(
             self.rupiah_data, self.rupiah_analysis
         )
-        self.assertIn(self.rupiah_data.title, script)
+        # Should contain RUPIAH MELEMAH in title
+        self.assertIn("RUPIAH", script)
+        self.assertIn("MELEMAH", script)
 
     def test_generate_rupiah_script_contains_rate(self):
         """Test Rupiah script contains exchange rate."""
@@ -94,6 +145,43 @@ class TestRupiahScriptGeneration(unittest.TestCase):
             self.rupiah_data, self.rupiah_analysis
         )
         self.assertIn("melemah", script.lower())
+
+    def test_generate_rupiah_script_has_5_contexts(self):
+        """Test Rupiah script has 5 context paragraphs."""
+        script = self.generator.generate_rupiah_script(
+            self.rupiah_data, self.rupiah_analysis
+        )
+        self.assertIn("indeks dolar AS", script)
+        self.assertIn("valuta asia", script.lower())  # "Asia" appears in "valuta Asia terlemah"
+        self.assertIn("minyak mentah", script)
+        self.assertIn("domestik", script.lower())
+        self.assertIn("pelaku pasar", script)
+
+    def test_generate_rupiah_script_asian_currencies_section(self):
+        """Test Rupiah script has Asian currencies section with date."""
+        script = self.generator.generate_rupiah_script(
+            self.rupiah_data, self.rupiah_analysis
+        )
+        self.assertIn("NILAI TUKAR MATA UANG ASIA", script)
+        self.assertIn("Peso Filipina", script)
+        self.assertIn("melemah", script.lower())
+
+    def test_generate_rupiah_script_forecast_format(self):
+        """Test Rupiah script forecast uses 'Hingga' format."""
+        script = self.generator.generate_rupiah_script(
+            self.rupiah_data, self.rupiah_analysis
+        )
+        self.assertIn("Hingga", script)
+        self.assertIn("16.050", script)
+        self.assertIn("16.150", script)
+
+    def test_generate_rupiah_script_percentage_format(self):
+        """Test Rupiah script percentage uses Indonesian decimal separator."""
+        script = self.generator.generate_rupiah_script(
+            self.rupiah_data, self.rupiah_analysis
+        )
+        # Should use comma: 0,62%
+        self.assertIn("0,62%", script)
 
 
 class TestGoldScriptGeneration(unittest.TestCase):
@@ -337,10 +425,14 @@ class TestScriptWithMissingData(unittest.TestCase):
             content="Test",
         )
         rupiah_analysis = RupiahAnalysis(
-            external_analysis="Analysis text.",
-            asian_currencies_text="No data",
-            global_domestic_analysis="More analysis.",
-            forecast_range="Rp 16.000 - Rp 16.200",
+            context_1="Analysis context 1.",
+            context_2="Analysis context 2.",
+            context_3="Analysis context 3.",
+            context_4="Analysis context 4.",
+            context_5="Analysis context 5.",
+            asian_currencies=[],
+            forecast_low="16.000",
+            forecast_high="16.200",
         )
 
         script = self.generator.generate_rupiah_script(rupiah_data, rupiah_analysis)
