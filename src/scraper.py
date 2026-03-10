@@ -581,14 +581,33 @@ class BloombergTechnozScraper:
         """Scrape latest Gold (Antam) news and data."""
         # Search specifically for "antam" articles
         keyword = GOLD_KEYWORD
-        
+
         # Search with weekday preference first
         urls = self._search_articles(keyword, prefer_weekday=True)
-        
+
         # If no weekday articles found, try without preference
         if not urls:
             urls = self._search_articles(keyword, prefer_weekday=False)
+
+        # Filter to ensure only articles with "antam" in the title are selected
+        filtered_urls = []
+        for url in urls:
+            soup = self._fetch_page(url)
+            if soup:
+                title_selectors = [
+                    "h1.entry-title",
+                    "h1.post-title",
+                    "h1.wp-block-post-title",
+                    "article h1",
+                    "h1",
+                ]
+                title = self._extract_text(soup, title_selectors)
+                if title and "antam" in title.lower():
+                    filtered_urls.append(url)
+                    print(f"  ✓ Found Antam article: {title[:50]}...")
         
+        urls = filtered_urls if filtered_urls else urls
+
         # Fallback: Direct URL to recent Antam article (if sitemap doesn't have it)
         if not urls:
             print(f"  Sitemap search failed, trying direct URL fallback...")

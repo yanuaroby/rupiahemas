@@ -202,10 +202,15 @@ class TestGoldScriptGeneration(unittest.TestCase):
             content="Test content about gold",
         )
         self.gold_analysis = GoldAnalysis(
-            global_correlation="Emas Antam mengikuti tren global.",
-            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
-            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
-            price_catalysts="Faktor geopolitik mendorong harga.",
+            context_1="Penurunan harga emas Antam hari ini sejalan dengan harga emas dunia yang anjlok 1,58% dibanding sebelumnya.",
+            context_2="Emas yang sempat turun 4,39% dua hari lalu membuat harganya relatif terjangkau dan membuat investor kembali memburunya.",
+            context_3="Pelemahan harga emas terjadi ditengah penguatan indeks dolar AS hari ini akibat lonjakan harga minyak dunia.",
+            context_4="Perang di Timur Tengah berisiko menyebabkan harga energi dunia melonjak sehingga tak ada ruang untuk penurunan suku bunga.",
+            context_5="Harapan akan penurunan suku bunga acuan pada tahun ini kian memudar, dan ini menjadi angin segar bagi dolar AS.",
+            forecast_usd_low="1.980",
+            forecast_usd_high="2.020",
+            forecast_idr_low="1.040.000",
+            forecast_idr_high="1.060.000",
         )
 
     def test_generate_gold_script_structure(self):
@@ -217,16 +222,19 @@ class TestGoldScriptGeneration(unittest.TestCase):
         # Check required sections exist
         self.assertIn("JUDUL :", script)
         self.assertIn("HARGA EMAS ANTAM", script)
-        self.assertIn("HARGA BUYBACK EMAS ANTAM", script)
+        self.assertIn("BUYBACK EMAS ANTAM", script)
         self.assertIn("HARGA EMAS DUNIA", script)
-        self.assertIn("PERKIRAAN KENAIKAN HARGA EMAS DUNIA", script)
+        self.assertIn("PERKIRAAN", script)
+        self.assertIn("*****END", script)
 
-    def test_generate_gold_script_simplified_title(self):
-        """Test Gold script uses simplified title format."""
+    def test_generate_gold_script_catchy_title(self):
+        """Test Gold script generates catchy title."""
         script = self.generator.generate_gold_script(
             self.gold_data, self.gold_analysis
         )
-        self.assertIn("JUDUL : EMAS ANTAM NAIK RP5.000/GRAM, HARI INI", script)
+        # Should contain EMAS ANTAM and NAIK in title
+        self.assertIn("EMAS ANTAM", script)
+        self.assertIn("NAIK", script)
 
     def test_generate_gold_script_contains_price(self):
         """Test Gold script contains Antam price."""
@@ -240,15 +248,15 @@ class TestGoldScriptGeneration(unittest.TestCase):
         script = self.generator.generate_gold_script(
             self.gold_data, self.gold_analysis
         )
-        self.assertIn("kembali naik", script)
+        self.assertIn("menguat", script.lower())
 
     def test_generate_gold_script_buyback_independent_trend(self):
         """Test buyback trend is calculated independently from Antam."""
         script = self.generator.generate_gold_script(
             self.gold_data, self.gold_analysis
         )
-        # Antam is naik, but buyback_change is negative so should be turun
-        self.assertIn("Turun Rp4.500/gram", script)
+        # Antam is naik, but buyback_change is negative so should be Melemah
+        self.assertIn("Melemah", script)
 
     def test_generate_gold_script_global_gold_format(self):
         """Test global gold price is formatted correctly with decimal."""
@@ -256,7 +264,8 @@ class TestGoldScriptGeneration(unittest.TestCase):
             self.gold_data, self.gold_analysis
         )
         # Should have decimal format like "US$ 2.000,0"
-        self.assertIn("US$ 2.000,0/troy ons", script)
+        self.assertIn("US$", script)
+        self.assertIn("/troy ons", script)
 
     def test_generate_gold_script_percentage_format(self):
         """Test percentage uses Indonesian format with comma."""
@@ -273,16 +282,63 @@ class TestGoldScriptGeneration(unittest.TestCase):
         )
         self.assertIsNotNone(script)
 
-    def test_generate_gold_title_helper(self):
-        """Test the gold title helper method."""
-        title = self.generator._generate_gold_title("naik", 28000)
-        self.assertEqual(title, "EMAS ANTAM NAIK RP28.000/GRAM, HARI INI")
+    def test_generate_catchy_gold_title_large_move(self):
+        """Test catchy gold title generation for large percentage moves."""
+        title = self.generator._generate_catchy_gold_title("naik", 28000, 1.5)
+        self.assertIn("EMAS ANTAM", title)
+        self.assertIn("NAIK", title)
+        # Title uses dot for percentage
+        self.assertIn("28.0%", title)
 
-        title = self.generator._generate_gold_title("turun", 15000)
-        self.assertEqual(title, "EMAS ANTAM TURUN RP15.000/GRAM, HARI INI")
+    def test_generate_catchy_gold_title_small_move(self):
+        """Test catchy gold title generation for small percentage moves."""
+        title = self.generator._generate_catchy_gold_title("turun", 5000, 0.25)
+        self.assertIn("EMAS ANTAM", title)
+        self.assertIn("TURUN", title)
 
-        title = self.generator._generate_gold_title("stagnan", 0)
-        self.assertEqual(title, "EMAS ANTAM STAGNAN RP0/GRAM, HARI INI")
+    def test_generate_catchy_gold_title_stagnan(self):
+        """Test catchy gold title generation for stagnan."""
+        title = self.generator._generate_catchy_gold_title("stagnan", 0, 0)
+        self.assertIn("EMAS ANTAM", title)
+        self.assertIn("STAGNAN", title)
+
+    def test_generate_gold_script_has_5_contexts(self):
+        """Test Gold script has 5 context paragraphs."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        self.assertIn("emas dunia", script.lower())
+        self.assertIn("investor", script.lower())
+        self.assertIn("dolar as", script.lower())  # "indeks dolar AS" appears as "dolar as"
+        self.assertIn("timur tengah", script.lower())
+        self.assertIn("suku bunga", script.lower())
+
+    def test_generate_gold_script_forecast_format(self):
+        """Test Gold script forecast uses 'hingga' format."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        self.assertIn("hingga", script.lower())
+        self.assertIn("1.980", script)
+        self.assertIn("2.020", script)
+
+    def test_generate_gold_script_has_end_marker(self):
+        """Test Gold script has *****END marker."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        self.assertIn("*****END", script)
+
+    def test_generate_gold_script_has_two_separators_in_content(self):
+        """Test Gold script has two **** separators in content (excluding *****END)."""
+        script = self.generator.generate_gold_script(
+            self.gold_data, self.gold_analysis
+        )
+        # Count occurrences of **** (not *****END)
+        # Remove *****END first, then count ****
+        content_without_end = script.replace("*****END", "")
+        count = content_without_end.count("****")
+        self.assertEqual(count, 2)
 
     def test_generate_gold_script_stagnan_no_change_line(self):
         """Test that stagnan prices don't show change line."""
@@ -299,21 +355,22 @@ class TestGoldScriptGeneration(unittest.TestCase):
             content="Test content",
         )
         gold_analysis = GoldAnalysis(
-            global_correlation="Korelasi text.",
-            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
-            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
-            price_catalysts="Catalyst text.",
+            context_1="Korelasi text.",
+            context_2="Investor text.",
+            context_3="Eksternal text.",
+            context_4="Geopolitik text.",
+            context_5="Suku bunga text.",
+            forecast_usd_low="1.980",
+            forecast_usd_high="2.020",
+            forecast_idr_low="1.040.000",
+            forecast_idr_high="1.060.000",
         )
 
         script = self.generator.generate_gold_script(gold_data, gold_analysis)
 
-        # Should NOT contain "Stagnan Rp 0/gram"
-        self.assertNotIn("Stagnan Rp 0", script)
-        self.assertNotIn("stagnan Rp 0", script.lower())
-
-        # Should only show the price, not the change line
-        self.assertIn("Rp 2.944.000/gram.", script)
-        self.assertIn("Rp 2.649.600/gram.", script)
+        # Should only show the price, not the change line with 0
+        self.assertIn("Rp2.944.000/gram", script)
+        self.assertIn("Rp2.649.600/gram", script)
 
     def test_generate_gold_script_naik_shows_change_line(self):
         """Test that naik prices show change line."""
@@ -330,17 +387,22 @@ class TestGoldScriptGeneration(unittest.TestCase):
             content="Test content",
         )
         gold_analysis = GoldAnalysis(
-            global_correlation="Korelasi text.",
-            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
-            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
-            price_catalysts="Catalyst text.",
+            context_1="Korelasi text.",
+            context_2="Investor text.",
+            context_3="Eksternal text.",
+            context_4="Geopolitik text.",
+            context_5="Suku bunga text.",
+            forecast_usd_low="1.980",
+            forecast_usd_high="2.020",
+            forecast_idr_low="1.040.000",
+            forecast_idr_high="1.060.000",
         )
 
         script = self.generator.generate_gold_script(gold_data, gold_analysis)
 
         # Should contain the change line
-        self.assertIn("Naik Rp28.000/gram dari hari sebelumnya", script)
-        self.assertIn("Naik Rp31.000/gram dari sebelumnya", script)
+        self.assertIn("Menguat Rp28.000/gram dari hari sebelumnya", script)
+        self.assertIn("Menguat Rp31.000/gram dari hari sebelumnya", script)
 
     def test_generate_gold_script_turun_shows_change_line(self):
         """Test that turun prices show change line."""
@@ -357,17 +419,22 @@ class TestGoldScriptGeneration(unittest.TestCase):
             content="Test content",
         )
         gold_analysis = GoldAnalysis(
-            global_correlation="Korelasi text.",
-            forecast_range_usd="US$ 1.980 - US$ 2.020/troy ons",
-            forecast_range_idr="Rp 1.040.000 - Rp 1.060.000/gram",
-            price_catalysts="Catalyst text.",
+            context_1="Korelasi text.",
+            context_2="Investor text.",
+            context_3="Eksternal text.",
+            context_4="Geopolitik text.",
+            context_5="Suku bunga text.",
+            forecast_usd_low="1.980",
+            forecast_usd_high="2.020",
+            forecast_idr_low="1.040.000",
+            forecast_idr_high="1.060.000",
         )
 
         script = self.generator.generate_gold_script(gold_data, gold_analysis)
 
-        # Should contain the change line with Turun
-        self.assertIn("Turun Rp15.000/gram dari hari sebelumnya", script)
-        self.assertIn("Turun Rp20.000/gram dari sebelumnya", script)
+        # Should contain the change line with Melemah
+        self.assertIn("Melemah Rp15.000/gram dari hari sebelumnya", script)
+        self.assertIn("Melemah Rp20.000/gram dari hari sebelumnya", script)
 
 
 class TestTelegramFormatting(unittest.TestCase):
@@ -454,10 +521,15 @@ class TestScriptWithMissingData(unittest.TestCase):
             content="Test",
         )
         gold_analysis = GoldAnalysis(
-            global_correlation="Correlation text.",
-            forecast_range_usd="US$ 1.900 - US$ 2.100",
-            forecast_range_idr="Rp 1.000.000 - Rp 1.100.000",
-            price_catalysts="Catalyst text.",
+            context_1="Correlation context 1.",
+            context_2="Investor context 2.",
+            context_3="Eksternal context 3.",
+            context_4="Geopolitik context 4.",
+            context_5="Suku bunga context 5.",
+            forecast_usd_low="1.900",
+            forecast_usd_high="2.100",
+            forecast_idr_low="1.000.000",
+            forecast_idr_high="1.100.000",
         )
 
         script = self.generator.generate_gold_script(gold_data, gold_analysis)

@@ -30,10 +30,15 @@ class RupiahAnalysis:
 class GoldAnalysis:
     """Analysis results for Gold script."""
 
-    global_correlation: str  # 2 sentences linking Antam to global gold
-    forecast_range_usd: str  # Predicted range in USD
-    forecast_range_idr: str  # Predicted range in IDR
-    price_catalysts: str  # 2 sentences on price movement reasons
+    context_1: str  # Korelasi dengan emas dunia
+    context_2: str  # Analisis perilaku investor/harga
+    context_3: str  # Faktor eksternal (dolar, minyak)
+    context_4: str  # Geopolitik & dampak energi
+    context_5: str  # Harapan suku bunga & dolar AS
+    forecast_usd_low: str  # USD forecast low
+    forecast_usd_high: str  # USD forecast high
+    forecast_idr_low: str  # IDR forecast low
+    forecast_idr_high: str  # IDR forecast high
 
 
 class GroqSummarizer:
@@ -116,42 +121,42 @@ class GroqSummarizer:
         self, data: GoldData, rupiah_rate: Optional[float]
     ) -> GoldAnalysis:
         """Generate fallback gold analysis without LLM."""
-        # Global correlation
-        trend_word = "kenaikan" if data.antam_trend == "naik" else "penurunan"
-        global_corr = (
-            f"Harga emas Antam mengikuti pergerakan harga emas dunia yang mengalami {trend_word}. "
-            f"Korelasi antara harga domestik dan global tetap kuat seiring dengan fluktuasi nilai tukar rupiah."
-        )
-
+        # Determine trend words
+        trend_word = "Penurunan" if data.antam_trend == "turun" else "Kenaikan" if data.antam_trend == "naik" else "Pergerakan"
+        
         # Forecast ranges
         if data.global_gold_usd:
             base_usd = data.global_gold_usd
             low_usd = int(base_usd - 20)
             high_usd = int(base_usd + 20)
-            forecast_usd = f"US$ {low_usd} - US$ {high_usd}/troy ons"
+            forecast_usd_low = f"{low_usd}"
+            forecast_usd_high = f"{high_usd}"
 
             if rupiah_rate:
                 conversion_rate = rupiah_rate / 31.1035  # grams to troy ons
                 low_idr = int(low_usd * conversion_rate)
                 high_idr = int(high_usd * conversion_rate)
-                forecast_idr = f"Rp {low_idr:,} - Rp {high_idr:,}/gram"
+                forecast_idr_low = f"{low_idr:,}".replace(",", ".")
+                forecast_idr_high = f"{high_idr:,}".replace(",", ".")
             else:
-                forecast_idr = "Rp 1.050.000 - Rp 1.100.000/gram"
+                forecast_idr_low = "1.050.000"
+                forecast_idr_high = "1.100.000"
         else:
-            forecast_usd = "US$ 2.000 - US$ 2.050/troy ons"
-            forecast_idr = "Rp 1.050.000 - Rp 1.100.000/gram"
-
-        # Price catalysts
-        catalysts = (
-            "Faktor geopolitik global dan status safe haven emas mendorong pergerakan harga. "
-            "Ekspektasi kebijakan moneter bank sentral utama juga mempengaruhi daya tarik logam mulia."
-        )
+            forecast_usd_low = "2.000"
+            forecast_usd_high = "2.050"
+            forecast_idr_low = "1.050.000"
+            forecast_idr_high = "1.100.000"
 
         return GoldAnalysis(
-            global_correlation=global_corr,
-            forecast_range_usd=forecast_usd,
-            forecast_range_idr=forecast_idr,
-            price_catalysts=catalysts,
+            context_1=f"{trend_word.lower()} harga emas Antam hari ini sejalan dengan pergerakan harga emas dunia yang mengalami perubahan signifikan.",
+            context_2=f"Pergerakan ini membuat investor kembali mempertimbangkan posisi mereka di pasar logam mulia.",
+            context_3="Faktor eksternal termasuk fluktuasi indeks dolar AS dan harga minyak dunia mempengaruhi sentimen pasar emas.",
+            context_4="Ketegangan geopolitik di berbagai wilayah berpotensi mendorong harga energi dan mendukung status safe haven emas.",
+            context_5="Ekspektasi kebijakan suku bunga bank sentral utama tetap menjadi katalis utama bagi pergerakan harga emas ke depan.",
+            forecast_usd_low=forecast_usd_low,
+            forecast_usd_high=forecast_usd_high,
+            forecast_idr_low=forecast_idr_low,
+            forecast_idr_high=forecast_idr_high,
         )
 
     def analyze_rupiah(self, data: RupiahData) -> RupiahAnalysis:
@@ -219,7 +224,7 @@ Contoh Mata Uang Asia JSON:
     ) -> GoldAnalysis:
         """Generate analysis for Gold data using LLM or fallback."""
         prompt = f"""
-Berdasarkan data berikut, buat analisis finansial profesional dalam bahasa Indonesia:
+Berdasarkan data berikut, buat analisis finansial profesional dalam bahasa Indonesia untuk script TikTok/Reels:
 
 JUDUL: {data.title}
 TREND: {data.antam_trend}
@@ -229,30 +234,42 @@ HARGA BUYBACK: {data.buyback_price}
 HARGA EMAS DUNIA: {data.global_gold_usd} USD
 PERUBAHAN EMAS DUNIA: {data.global_gold_change_pct}%
 TANGGAL: {data.date}
+KURS RUPIAH: {rupiah_rate}
 
 KONTEN BERITA:
 {data.content[:1500]}
 
 Tugas:
-1. Buat 2 kalimat korelasi emas Antam dengan emas dunia
-2. Berikan perkiraan range kenaikan harga emas dunia dalam USD
-3. Konversi forecast ke Rupiah (gunakan kurs {rupiah_rate} jika tersedia)
-4. Buat 2 kalimat alasan kenaikan/penurunan harga
+1. Buat 5 kalimat analisis terpisah dengan struktur:
+   - Konteks 1: Korelasi harga emas Antam dengan emas dunia (sebutkan persentase perubahan)
+   - Konteks 2: Analisis perilaku investor/harga (apakah investor memburu emas karena harga terjangkau)
+   - Konteks 3: Faktor eksternal (indeks dolar AS, harga minyak dunia)
+   - Konteks 4: Geopolitik & dampak energi (perang, risiko harga energi)
+   - Konteks 5: Harapan suku bunga & dampak ke dolar AS
+
+2. Berikan perkiraan range harga emas dunia dalam USD (low dan high)
+
+3. Konversi forecast ke Rupiah (gunakan kurs {rupiah_rate if rupiah_rate else 16000})
 
 Format output (gunakan pemisah |):
-[Korelasi Emas]|[Forecast USD]|[Forecast IDR]|[Alasan Kenaikan/Penurunan]
+[Konteks 1]|[Konteks 2]|[Konteks 3]|[Konteks 4]|[Konteks 5]|[Forecast USD Low]|[Forecast USD High]|[Forecast IDR Low]|[Forecast IDR High]
 """
 
         response = self._generate_with_groq(prompt)
 
         if response and "|" in response:
             parts = response.split("|")
-            if len(parts) >= 4:
+            if len(parts) >= 9:
                 return GoldAnalysis(
-                    global_correlation=parts[0].strip(),
-                    forecast_range_usd=parts[1].strip(),
-                    forecast_range_idr=parts[2].strip(),
-                    price_catalysts=parts[3].strip(),
+                    context_1=parts[0].strip(),
+                    context_2=parts[1].strip(),
+                    context_3=parts[2].strip(),
+                    context_4=parts[3].strip(),
+                    context_5=parts[4].strip(),
+                    forecast_usd_low=parts[5].strip(),
+                    forecast_usd_high=parts[6].strip(),
+                    forecast_idr_low=parts[7].strip(),
+                    forecast_idr_high=parts[8].strip(),
                 )
 
         # Use fallback if LLM fails

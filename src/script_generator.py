@@ -163,57 +163,70 @@ Rp{analysis.forecast_low} Hingga Rp{analysis.forecast_high}."""
         
         return header + "\n".join(lines)
 
-    def _generate_gold_title(
-        self, antam_trend: str, antam_change: float
-    ) -> str:
-        """Generate simplified gold title like 'EMAS ANTAM NAIK RP28.000/GRAM, HARI INI'."""
+    def _generate_catchy_gold_title(self, antam_trend: str, antam_change: float, global_change_pct: float) -> str:
+        """Generate a catchy title for Gold script that attracts viewers."""
         trend_upper = "NAIK" if antam_trend == "naik" else "TURUN" if antam_trend == "turun" else "STAGNAN"
-        change_formatted = self._format_number(int(antam_change))
-        return f"EMAS ANTAM {trend_upper} RP{change_formatted}/GRAM, HARI INI"
+        
+        # Use the larger percentage for impact
+        max_change = max(abs(antam_change) / 1000, abs(global_change_pct))
+        
+        if max_change >= 1:
+            return f"EMAS ANTAM {trend_upper}! INI PENYEBAB UTAMA HARGA GERAK {max_change:.1f}%"
+        elif max_change > 0:
+            return f"EMAS ANTAM {trend_upper} {max_change:.2f}%, PENGAMAT BILANG INI DIA PENYEBABNYA"
+        else:
+            return f"EMAS ANTAM {trend_upper} HARI INI, ANALIS PREDIKSI AKAN GERAK KE ARAH INI"
 
     def generate_gold_script(
         self, data: GoldData, analysis: GoldAnalysis, rupiah_rate: Optional[float] = None
     ) -> str:
         """
-        Generate Gold script following the template.
+        Generate Gold script following the new template.
 
         Template:
-        JUDUL : EMAS ANTAM NAIK RP28.000/GRAM, HARI INI
+        JUDUL : (judul tegas & menarik)
 
-        Harga emas PT Aneka Tambang Tbk atau Antam kembali naik
+        Harga emas PT Aneka Tambang Tbk atau Antam kembali (melemah/menguat) hari ini
 
-        HARGA EMAS ANTAM
-        Rp 2.944.000/gram.
-        Naik Rp28.000/gram dari hari sebelumnya
+        HARGA EMAS ANTAM (tanggal)
 
-        HARGA BUYBACK EMAS ANTAM
-        Rp 2.725.000/gram.
-        Turun Rp31.000/gram dari hari sebelumnya
+        Rp(berapa)/gram
+        (Melemah/Menguat) Rp(berapa)/gram dari hari sebelumnya
+
+        BUYBACK EMAS ANTAM (tanggal)
+
+        Rp(berapa)/gram
+        (melemah/menguat) Rp(berapa)/gram dari hari sebelumnya
 
         ****
-        Korelasi text...
+        (konteks 1-2)
 
-        HARGA EMAS DUNIA 20 FEBRUARI 2026
-        US$ 4.997,7/troy ons.
-        Rp84.408.733
-        Bertambah 0,43% dari hari sebelumnya
+        HARGA EMAS DUNIA (tanggal)
 
-        Catalyst text...
+        US$(berapa)/troy ons
+        Rp(dikonversi)
+        (melemah/menguat) (berapa)% dibandingkan penutupan perdagangan hari sebelumnya
 
-        PERKIRAAN KENAIKAN HARGA EMAS DUNIA
-        US$ 5.006/troy ons atau Rp. 84.548.916
+        ****
+        (konteks 3-5)
+
+        PERKIRAAN (Penguatan/Pelemahan) HARGA EMAS DUNIA (tanggal)
+
+        US$(berapa)/troy ons atau Rp(berapa)
         hingga
-        US$ 5.082/troy ons atau Rp. 85.832.519
+        US$(berapa)/troy ons atau Rp(berapa)
 
         *****END
         """
+        day_name, date_str = self._get_current_day_date()
+
         # Get values with fallbacks
         antam_price = data.antam_price or 1_000_000
-        antam_change = data.antam_change if data.antam_change else 0
+        antam_change = data.antam_change if data.antam_change is not None else 0
         antam_trend = data.antam_trend or "stagnan"
 
         buyback_price = data.buyback_price or int(antam_price * 0.9)
-        buyback_change = data.buyback_change if data.buyback_change else int(antam_change * 0.9)
+        buyback_change = data.buyback_change if data.buyback_change is not None else 0
 
         # Calculate buyback trend independently
         if buyback_change > 0:
@@ -228,66 +241,75 @@ Rp{analysis.forecast_low} Hingga Rp{analysis.forecast_high}."""
         buyback_change_abs = abs(buyback_change)
 
         global_gold = data.global_gold_usd or 2000
-        global_change_pct = data.global_gold_change_pct if data.global_gold_change_pct else 0
+        global_change_pct = data.global_gold_change_pct if data.global_gold_change_pct is not None else 0
 
         # Calculate IDR conversion for global gold
         # 1 troy oz = 31.1035 grams
-        if rupiah_rate:
-            global_gold_idr = int(global_gold * rupiah_rate / 31.1035)
-        else:
-            global_gold_idr = int(global_gold * 16000 / 31.1035)
+        actual_rupiah_rate = rupiah_rate if rupiah_rate else 16000
+        global_gold_idr = int(global_gold * actual_rupiah_rate / 31.1035)
 
-        # Determine trend words for Antam
-        antam_trend_action = "Naik" if antam_trend == "naik" else "Turun" if antam_trend == "turun" else "Stagnan"
-        antam_intro = "kembali naik" if antam_trend == "naik" else "kembali turun" if antam_trend == "turun" else "stagnan"
+        # Determine trend words for Antam intro
+        antam_intro = "menguat" if antam_trend == "naik" else "melemah" if antam_trend == "turun" else "stagnan"
+        
+        # Determine trend words for Antam price change
+        antam_trend_action = "Menguat" if antam_trend == "naik" else "Melemah" if antam_trend == "turun" else "Stagnan"
 
         # Determine trend words for buyback
-        buyback_trend_action = "Naik" if buyback_trend == "naik" else "Turun" if buyback_trend == "turun" else "Stagnan"
+        buyback_trend_action = "Menguat" if buyback_trend == "naik" else "Melemah" if buyback_trend == "turun" else "Stagnan"
 
         # Determine trend word for global gold
-        global_trend_word = "Bertambah" if global_change_pct >= 0 else "Berkurang"
+        global_trend_word = "Menguat" if global_change_pct >= 0 else "Melemah"
         global_change_pct_abs = abs(global_change_pct)
 
-        # Generate simplified title
-        title = self._generate_gold_title(antam_trend, antam_change_abs)
+        # Format percentage with Indonesian decimal separator
+        pct_formatted = f"{global_change_pct_abs:.2f}".replace(".", ",")
 
-        # Build Antam price section - only show change line if there's a change
-        antam_price_section = f"Rp {self._format_number(antam_price)}/gram."
-        if antam_change_abs > 0:
-            antam_price_section += f"\n{antam_trend_action} Rp{self._format_number(antam_change_abs)}/gram dari hari sebelumnya"
+        # Generate catchy title
+        catchy_title = self._generate_catchy_gold_title(antam_trend, antam_change_abs, global_change_pct)
 
-        # Build Buyback price section - only show change line if there's a change
-        buyback_price_section = f"Rp {self._format_number(buyback_price)}/gram."
-        if buyback_change_abs > 0:
-            buyback_price_section += f"\n{buyback_trend_action} Rp{self._format_number(buyback_change_abs)}/gram dari sebelumnya"
+        # Determine forecast trend word
+        forecast_trend = "Penguatan" if global_change_pct >= 0 else "Pelemahan"
 
         # Format the script with proper structure
-        script = f"""JUDUL : {title}
+        script = f"""JUDUL : {catchy_title}
 
-Harga emas PT Aneka Tambang Tbk atau Antam {antam_intro}
+Harga emas PT Aneka Tambang Tbk atau Antam kembali {antam_intro} hari ini
 
-HARGA EMAS ANTAM
+HARGA EMAS ANTAM {date_str}
 
-{antam_price_section}
+Rp{self._format_number(antam_price)}/gram
+{antam_trend_action if antam_change_abs > 0 else 'Stagnan'} Rp{self._format_number(antam_change_abs)}/gram dari hari sebelumnya
 
-HARGA BUYBACK EMAS ANTAM
+BUYBACK EMAS ANTAM {date_str}
 
-{buyback_price_section}
+Rp{self._format_number(buyback_price)}/gram
+{buyback_trend_action} Rp{self._format_number(buyback_change_abs)}/gram dari hari sebelumnya
 
 ****
-{analysis.global_correlation}
+{analysis.context_1}
 
-HARGA EMAS DUNIA {data.date.upper() if data.date else ''}
+{analysis.context_2}
 
-US$ {self._format_number(global_gold, 1)}/troy ons.
+HARGA EMAS DUNIA {date_str}
+
+US${self._format_number(global_gold, 1)}/troy ons
 Rp{self._format_number(global_gold_idr)}
-{global_trend_word} {self._format_number(global_change_pct_abs, 2).replace('.', ',')}% dari hari sebelumnya
+{global_trend_word} {pct_formatted}% dibandingkan penutupan perdagangan hari sebelumnya
 
-{analysis.price_catalysts}
+****
+{analysis.context_3}
 
-PERKIRAAN KENAIKAN HARGA EMAS DUNIA
+{analysis.context_4}
 
-{analysis.forecast_range_usd} atau {analysis.forecast_range_idr}"""
+{analysis.context_5}
+
+PERKIRAAN {forecast_trend} HARGA EMAS DUNIA {date_str}
+
+US${analysis.forecast_usd_low}/troy ons atau Rp{analysis.forecast_idr_low}
+hingga
+US${analysis.forecast_usd_high}/troy ons atau Rp{analysis.forecast_idr_high}
+
+*****END"""
 
         return script.strip()
 
