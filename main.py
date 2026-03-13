@@ -5,21 +5,11 @@ Scrapes financial data, generates scripts, and sends via Telegram.
 """
 
 import sys
-from datetime import datetime
 
 from src.scraper import BloombergTechnozScraper
 from src.summarizer import GroqSummarizer
 from src.script_generator import ScriptGenerator
 from src.telegram_bot import TelegramSender
-from src.lock_manager import LockManager
-from src.config import WIB_TIMEZONE
-
-
-def is_weekday() -> bool:
-    """Check if today is a weekday (Monday-Friday) in WIB timezone."""
-    wib_tz = WIB_TIMEZONE
-    now = datetime.now(wib_tz)
-    return now.weekday() < 5  # 0-4 are Monday-Friday
 
 
 def main():
@@ -27,13 +17,6 @@ def main():
     print("=" * 50)
     print("BloombergTechnoz Financial Script Bot")
     print("=" * 50)
-
-    # Acquire execution lock to prevent duplicate runs
-    print("\nAcquiring execution lock...")
-    lock_manager = LockManager(lock_timeout_minutes=60)
-    if not lock_manager.acquire_lock():
-        print("✗ Another instance is already running. Exiting.")
-        sys.exit(0)
 
     try:
         # Check environment variables
@@ -144,10 +127,6 @@ def main():
         else:
             print("\nBot execution completed with errors.")
             sys.exit(1)
-
-    finally:
-        # Always release the lock
-        lock_manager.release_lock()
 
 
 if __name__ == "__main__":

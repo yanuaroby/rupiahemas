@@ -2,14 +2,10 @@ name: Daily Financial Script Bot
 
 on:
   schedule:
-    # Run every 15 minutes from 09:00-10:00 WIB (02:00-03:00 UTC)
-    # First run that finds articles sends immediately, lock prevents duplicates
+    # Run once daily at 09:30 WIB (02:30 UTC)
     # Cron format: minute hour day month weekday (UTC timezone)
-    # WIB = UTC+7
-    - cron: '0 2 * * *'    # 09:00 WIB - Primary run
-    - cron: '15 2 * * *'   # 09:15 WIB - Catch early articles
-    - cron: '30 2 * * *'   # 09:30 WIB - Mid-window check
-    - cron: '0 3 * * *'    # 10:00 WIB - Final fallback
+    # WIB = UTC+7, so 09:30 WIB = 02:30 UTC
+    - cron: '30 2 * * *'    # 09:30 WIB - Daily run
   workflow_dispatch:  # Allow manual trigger for testing
 
 jobs:
